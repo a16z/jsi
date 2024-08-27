@@ -1,0 +1,64 @@
+[project]
+name = "jsi"
+version = "0.1.0"
+description = "just solve it - a command line tool to run multiple SMT (Satisfiability Modulo Theories) solvers in parallel"
+authors = [
+    { name = "karmacoma", email = "karma@a16z.com" }
+]
+dependencies = [
+    "loguru"
+]
+readme = "README.md"
+requires-python = ">= 3.11"
+
+[project.scripts]
+jsi = 'jsi:main'
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.rye]
+managed = true
+dev-dependencies = [
+    "pyright>=1.1.377",
+    "pytest>=8.3.2",
+]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/jsi"]
+
+[tool.ruff]
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+	"A",  # warn about shadowing built-ins
+    "E",  # pycodestyle
+    "F",  # pyflakes
+    "UP", # pyupgrade
+    "B",  # flake8-bugbear
+    "SIM",# flake8-simplify
+    "I",  # isort
+    "N",    # naming
+    "W",    # warnings
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["jsi"]
+
+[tool.pyright]
+venvPath = "."          # rye installs the venv in the current dir
+venv = ".venv"          #       in a folder called `.venv`
+strict = ["**/*.py"]    # use 'strict' checking on all files
+pythonVersion = "3.11"
+
+[tool.rye.scripts]
+fmt = "rye fmt"
+lint = "rye lint --fix"
+check = "pyright"
+test = "rye test"
+all = { chain = ["fmt", "lint", "check", "test"] }
