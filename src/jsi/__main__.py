@@ -7,12 +7,11 @@ Usage:
 import sys
 from contextlib import contextmanager
 from time import perf_counter
-from typing import TextIO
 
 import click
 from loguru import logger
 
-from jsi.logic import solve
+from jsi.core import TaskResult, solve
 
 
 @contextmanager
@@ -20,19 +19,17 @@ def timer(description: str):
     start = perf_counter()
     yield
     elapsed = perf_counter() - start
-    logger.trace(f"{description}: {elapsed:.3f} seconds")
+    logger.trace(f"{description}: {elapsed:.3f}s")
 
 
 @click.command()
 @click.version_option()
-@click.argument("file", type=click.File(), required=True)
-def main(file: TextIO) -> int:
-    with timer("read file"):
-        smt = file.read()
-
-    result = solve(smt)
-    click.echo(result)
-    return 0
+@click.argument("file", type=click.Path(exists=True), required=True)
+def main(file: click.Path) -> int:
+    with timer("solve"):
+        result = solve(file)
+        click.echo(result.value)
+        return 0 if result in (TaskResult.SAT, TaskResult.UNSAT) else 1
 
 
 sys.exit(main())

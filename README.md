@@ -17,9 +17,17 @@ jsi --help
 ### Customize logging output
 
 ```sh
-# customize logging output
 # in particular, the TRACE level is useful to see the time taken by each step
 LOGURU_LEVEL=TRACE jsi
+
+# use CRITICAL to silence most logs
+LOGURU_LEVEL=CRITICAL jsi
+```
+
+### Redirect log output
+
+```sh
+jsi 2&> logs.txt
 ```
 
 
