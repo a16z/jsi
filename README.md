@@ -12,6 +12,17 @@ uv tool install jsi
 jsi --help
 ```
 
+## Useful tips
+
+### Customize logging output
+
+```sh
+# customize logging output
+# in particular, the TRACE level is useful to see the time taken by each step
+LOGURU_LEVEL=TRACE jsi
+```
+
+
 ## Development
 
 Pre-requisites: install [rye](https://rye.astral.sh/guide/installation/#installing-rye)
