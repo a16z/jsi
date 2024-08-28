@@ -3,16 +3,13 @@ from __future__ import annotations
 
 import enum
 import io
+import pathlib
 import subprocess
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
 
 from loguru import logger
-
-if TYPE_CHECKING:
-    import click
 
 sat, unsat, error, unknown, timeout, killed = (
     "sat",
@@ -23,15 +20,17 @@ sat, unsat, error, unknown, timeout, killed = (
     "killed",
 )
 
+# for yices, needs to include (get-model) in the SMT2 file to generate the model
 SOLVERS = {
     "bitwuzla": "bitwuzla --produce-models".split(),
     "boolector": "boolector --model-gen --output-number-format=hex".split(),
     "cvc4": "cvc4 --produce-models".split(),
     "cvc5": "cvc5 --produce-models".split(),
     "stp": "stp --print-counterex --SMTLIB2".split(),
-    "yices-smt2": "yices-smt2".split(),  # needs to include (get-model) in the SMT2 file to generate the model
+    "yices-smt2": "yices-smt2".split(),
     "z3": "z3 --model".split(),
 }
+
 
 class TaskResult(enum.Enum):
     SAT = sat
@@ -64,7 +63,7 @@ class ProcessMetadata:
     process: subprocess.Popen[bytes]
     start_time: float = field(default_factory=time.time)
     end_time: float | None = None
-    timeout_expired: float = False
+    has_timed_out: bool = False
     _result: str | None = None
 
     def done(self):
@@ -86,9 +85,9 @@ class ProcessMetadata:
 
     def _get_result(self):
         if self.process.returncode == -15:
-            return timeout if self.timeout_expired else killed
+            return timeout if self.has_timed_out else killed
 
-        with open(self.output_file.name, "r") as f:
+        with open(self.output_file.name) as f:
             line = f.readline()
             if line == "sat\n":
                 return sat
@@ -97,8 +96,10 @@ class ProcessMetadata:
             elif "error" in line:
                 return error
             elif "ASSERT(" in line:
-                return sat  # stp may not return sat as the first line when there is a counterexample
-            elif self.timeout_expired:
+                # stp may not return sat as the first line
+                # when there is a counterexample
+                return sat
+            elif self.has_timed_out:
                 return timeout
             else:
                 return unknown
@@ -125,11 +126,9 @@ class ProcessController:
     solvers: list[str]
     task: Task
 
-
     def join(self):
         # TODO: keep or kill?
         ...
-
 
     def start(self):
         task = self.task
@@ -143,7 +142,9 @@ class ProcessController:
         for solver in self.solvers:
             logger.debug(f"starting {solver}")
             command = SOLVERS[solver] + [smt_file]
-            output_file = open(f"{smt_file}.{solver}.out", "w")
+
+            # the output file will be closed by the monitoring thread
+            output_file = open(f"{smt_file}.{solver}.out", "w")  # noqa: SIM115
 
             # most solvers don't write to stderr, so avoid creating the extra files
             error_file = None
@@ -161,7 +162,6 @@ class ProcessController:
 
             # spawn a thread that will monitor this process
             threading.Thread(target=self._monitor_process, args=(proc_meta,)).start()
-
 
     def kill_task(self) -> bool:
         """Kill all processes associated with the current task.
@@ -190,7 +190,6 @@ class ProcessController:
         task.status = TaskStatus.TERMINATED
         return True
 
-
     def _on_task_finished(self, task: Task):
         """Called when the given task has finished.
 
@@ -199,7 +198,6 @@ class ProcessController:
         """
 
         pass
-
 
     def _monitor_process(self, proc_meta: ProcessMetadata):
         """Monitor the given process for completion.
@@ -211,13 +209,13 @@ class ProcessController:
             # Wait for the process to complete
             # [note](https://docs.python.org/3/library/asyncio-subprocess.html#asyncio.subprocess.Process)
             #   the Process.wait() method is asynchronous,
-            #   whereas subprocess.Popen.wait() method is implemented as a blocking busy loop;
+            #   whereas subprocess.Popen.wait() is implemented as a blocking busy loop;
             proc_meta.process.wait(timeout=(self.config.timeout_seconds or None))
         except subprocess.TimeoutExpired:
             logger.debug(
                 f"timeout expired for {proc_meta.solver_name} on {proc_meta.task_name}"
             )
-            proc_meta.timeout_expired = True
+            proc_meta.has_timed_out = True
 
             # spawn a killer thread
             threading.Thread(target=self._kill_process, args=(proc_meta,)).start()
@@ -244,25 +242,25 @@ class ProcessController:
         except subprocess.TimeoutExpired:
             if process.poll() is None:
                 logger.debug(
-                    f"process {process!r} still running after {grace_period_seconds} seconds, killing it"
+                    f"process {process!r} still running after {grace_period_seconds}s"
                 )
                 process.kill()
 
     def _on_process_finished(self, proc_meta: ProcessMetadata):
         # Update the end_time in proc_meta
         proc_meta.end_time = time.time()
-        elapsed = proc_meta.end_time - proc_meta.start_time
 
+        elapsed = proc_meta.end_time - proc_meta.start_time
         exitcode = proc_meta.process.returncode
         logger.info(f"{proc_meta.solver_name} returned {exitcode} in {elapsed:.2f}s")
 
-        task = self.task
-        assert task is not None
-        if self.config.early_exit:
-            if task.status == TaskStatus.RUNNING and proc_meta.ok():
-                self.kill_task()
+        if (
+            proc_meta.ok()
+            and self.config.early_exit
+            and self.task.status == TaskStatus.RUNNING
+        ):
+            self.kill_task()
 
 
-
-def solve(smtfile: click.Path) -> tuple[TaskResult, str]:
+def solve(smtfile: pathlib.Path) -> tuple[TaskResult, str]:
     return TaskResult.UNKNOWN, ""
