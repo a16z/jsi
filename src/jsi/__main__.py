@@ -25,7 +25,11 @@ def timer(description: str):
 
 @click.command()
 @click.version_option()
-@click.argument("file", type=click.Path(exists=True, dir_okay=False), required=True)
+@click.argument(
+    "file",
+    type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
+    required=True,
+)
 def main(file: pathlib.Path) -> int:
     with timer("solve"):
         result, output = solve(file)
