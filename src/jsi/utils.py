@@ -33,15 +33,28 @@ class Supervisor(multiprocessing.Process):
         self.child_pids = child_pids
 
     def run(self):
-        logger.debug(f"supervisor started -- watching parent PID {self.parent_pid}")
+        logger.debug(f"supervisor started (PID: {self.pid})")
+        logger.debug(f"watching parent (PID: {self.parent_pid})")
 
-        while True:
-            if psutil.pid_exists(self.parent_pid):
-                time.sleep(1)
-                continue
+        last_message_time = time.time()
+        try:
+            while True:
+                current_time = time.time()
+                if current_time - last_message_time >= 60:
+                    logger.debug(f"supervisor still running (PID: {self.pid})")
+                    last_message_time = current_time
 
-            logger.debug(f"parent PID {self.parent_pid} has died, terminating children")
-            for pid in self.child_pids:
-                kill_process(pid)
-            logger.debug("All children terminated. Supervisor exiting.")
-            break
+                if psutil.pid_exists(self.parent_pid):
+                    time.sleep(1)
+                    continue
+
+                logger.debug(f"parent (PID {self.parent_pid} has died)")
+                for pid in self.child_pids:
+                    kill_process(pid)
+
+                logger.debug("all children terminated, supervisor exiting.")
+                break
+        except KeyboardInterrupt:
+            logger.debug("supervisor interrupted")
+
+        logger.debug(f"supervisor exiting (PID: {self.pid})")

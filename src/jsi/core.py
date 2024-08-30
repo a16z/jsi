@@ -257,12 +257,14 @@ class ProcessController:
             self.monitors.append(monitor)
             monitor.start()
 
-    def kill_task(self) -> bool:
+    def kill(self) -> bool:
         """Kill all processes associated with the current task.
 
         :return:
             True if the task was killed, False otherwise.
         """
+
+        logger.debug("killing all processes")
 
         task = self.task
         if task.status.value < TaskStatus.RUNNING.value:
@@ -373,7 +375,7 @@ class ProcessController:
             and self.config.early_exit
             and self.task.status.value < TaskStatus.TERMINATED.value
         ):
-            self.kill_task()
+            self.kill()
             logger.debug(f"setting result to {proc_meta.result()}")
             self.task.result = proc_meta.result()
 

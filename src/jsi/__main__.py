@@ -43,7 +43,7 @@ def main(file: pathlib.Path) -> int:
         cleanup()
 
     def cleanup():
-        controller.kill_task()
+        controller.kill()
 
     # register the signal listener
     for signum in [
@@ -54,9 +54,10 @@ def main(file: pathlib.Path) -> int:
     ]:
         signal.signal(signum, signal_listener)
 
-    # start a signal handling thread
-    thread = threading.Thread(target=signal_handler)
-    thread.start()
+    # start a signal handling thread in daemon mode so that it does not block
+    # the program from exiting
+    signal_handler_thread = threading.Thread(target=signal_handler, daemon=True)
+    signal_handler_thread.start()
 
     # also register the cleanup function to be called on exit
     atexit.register(cleanup)
@@ -65,19 +66,20 @@ def main(file: pathlib.Path) -> int:
         # start the solver processes
         controller.start()
 
-        # start a supervisor process
+        # start a supervisor process in daemon mode so that it does not block
+        # the program from exiting
         child_pids = [proc_meta.process.pid for proc_meta in controller.task.processes]
         supervisor = Supervisor(os.getpid(), child_pids)
+        supervisor.daemon = True
         supervisor.start()
 
         # wait for the solver processes to finish
         controller.join()
 
         click.echo(task.result.value)
-        # click.echo(task.result.output)
         return 0 if task.result in (TaskResult.SAT, TaskResult.UNSAT) else 1
     except KeyboardInterrupt:
-        controller.kill_task()
+        controller.kill()
         return 1
 
 
