@@ -26,8 +26,9 @@ from jsi.utils import Supervisor
     type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
     required=True,
 )
-def main(file: pathlib.Path) -> int:
-    config = Config()
+@click.option("--timeout", type=float, help="timeout in seconds", default=0)
+def main(file: pathlib.Path, timeout: float) -> int:
+    config = Config(timeout_seconds=timeout)
     task = Task(name=str(file))
     controller = ProcessController(config, list(SOLVERS.keys()), task)
 
