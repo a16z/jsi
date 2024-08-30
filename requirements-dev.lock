@@ -22,5 +22,6 @@ packaging==24.1
     # via pytest
 pluggy==1.5.0
     # via pytest
-pyright==1.1.377
+pyright==1.1.378
+    # via jsi
 pytest==8.3.2

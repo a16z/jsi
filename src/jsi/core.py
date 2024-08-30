@@ -9,6 +9,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from typing import Any
+
 from loguru import logger
 
 sat, unsat, error, unknown, timeout, killed = (
@@ -189,7 +190,6 @@ class Task:
 
             logger.debug(f"setting status to {new_status}")
             self._status = new_status
-
 
     @property
     def result(self) -> TaskResult:

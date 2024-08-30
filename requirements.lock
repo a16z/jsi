@@ -14,3 +14,7 @@ click==8.1.7
     # via jsi
 loguru==0.7.2
     # via jsi
+nodeenv==1.9.1
+    # via pyright
+pyright==1.1.378
+    # via jsi
