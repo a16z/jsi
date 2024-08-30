@@ -64,6 +64,7 @@ class TaskStatus(enum.Enum):
 class Config:
     early_exit: bool = True
     timeout_seconds: float = 0
+    debug: bool = False
 
 
 class DelayedPopen:
@@ -269,7 +270,6 @@ class ProcessController:
         # to TERMINATING/TERMINATED, in that case we don't want to go back to RUNNING
         task.set_status(TaskStatus.RUNNING, expected_status=TaskStatus.STARTING)
 
-
     def _monitor_process(self, proc_meta: ProcessMetadata):
         """Monitor the given process for completion.
 
@@ -306,7 +306,6 @@ class ProcessController:
             # notify the controller that the process has finished
             if proc_meta.done():
                 self._on_process_finished(proc_meta)
-
 
     def kill(self) -> bool:
         """Kill all processes associated with the current task.
@@ -361,7 +360,6 @@ class ProcessController:
 
         task.status = TaskStatus.TERMINATED
         return True
-
 
     def _kill_process(self, proc_meta: ProcessMetadata):
         process = proc_meta.process

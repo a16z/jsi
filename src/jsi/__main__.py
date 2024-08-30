@@ -18,6 +18,8 @@ from loguru import logger
 from jsi.core import SOLVERS, Config, ProcessController, Task, TaskResult, TaskStatus
 from jsi.utils import Supervisor
 
+logger.disable("jsi")
+
 
 @click.command()
 @click.version_option()
@@ -27,8 +29,12 @@ from jsi.utils import Supervisor
     required=True,
 )
 @click.option("--timeout", type=float, help="timeout in seconds", default=0)
-def main(file: pathlib.Path, timeout: float) -> int:
-    config = Config(timeout_seconds=timeout)
+@click.option("--debug", type=bool, help="enable debug logging", is_flag=True)
+def main(file: pathlib.Path, timeout: float, debug: bool) -> int:
+    if debug:
+        logger.enable("jsi")
+
+    config = Config(timeout_seconds=timeout, debug=debug)
     task = Task(name=str(file))
     controller = ProcessController(config, list(SOLVERS.keys()), task)
 
@@ -74,7 +80,7 @@ def main(file: pathlib.Path, timeout: float) -> int:
         # start a supervisor process in daemon mode so that it does not block
         # the program from exiting
         child_pids = [proc_meta.process.pid for proc_meta in controller.task.processes]
-        supervisor = Supervisor(os.getpid(), child_pids)
+        supervisor = Supervisor(os.getpid(), child_pids, debug=config.debug)
         supervisor.daemon = True
         supervisor.start()
 

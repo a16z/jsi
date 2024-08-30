@@ -7,6 +7,8 @@ import time
 import psutil
 from loguru import logger
 
+logger.disable("jsi.utils")
+
 
 @contextlib.contextmanager
 def timer(description: str):
@@ -27,12 +29,16 @@ def kill_process(pid: int):
 class Supervisor(multiprocessing.Process):
     """Supervisor process that monitors the parent process and its children."""
 
-    def __init__(self, parent_pid: int, child_pids: list[int]):
+    def __init__(self, parent_pid: int, child_pids: list[int], debug: bool = False):
         super().__init__()
         self.parent_pid = parent_pid
         self.child_pids = child_pids
+        self.debug = debug
 
     def run(self):
+        if self.debug:
+            logger.enable("jsi.utils")
+
         logger.debug(f"supervisor started (PID: {self.pid})")
         logger.debug(f"watching parent (PID: {self.parent_pid})")
 
