@@ -46,14 +46,18 @@ class TaskResult(enum.Enum):
 class TaskStatus(enum.Enum):
     NOT_STARTED = 1
 
-    # at least one process is running, more may be started
-    RUNNING = 2
+    # transition state while processes are being started
+    # (some may have terminated already)
+    STARTING = 2
+
+    # processes are running
+    RUNNING = 3
 
     # at least one process is terminating, no new processes can be started
-    TERMINATING = 3
+    TERMINATING = 4
 
     # all processes have terminated
-    TERMINATED = 4
+    TERMINATED = 5
 
 
 @dataclass(frozen=True)
@@ -180,14 +184,21 @@ class Task:
         self,
         new_status: TaskStatus,
         required_status: TaskStatus | None = None,
+        expected_status: TaskStatus | None = None,
     ):
         with self._lock:
             status = self._status
             if new_status.value < status.value:
-                raise ValueError(f"can switch from {status} to {new_status}")
+                raise ValueError(f"can not switch from {status} to {new_status}")
 
+            # hard error
             if required_status is not None and status != required_status:
                 raise ValueError(f"expected status {required_status}, got {status}")
+
+            # soft error
+            if expected_status is not None and status != expected_status:
+                logger.warning(f"expected status {expected_status}, got {status}")
+                return
 
             logger.debug(f"setting status to {new_status}")
             self._status = new_status
@@ -225,13 +236,10 @@ class ProcessController:
     def start(self):
         task = self.task
 
-        if task.status != TaskStatus.NOT_STARTED:
-            raise RuntimeError(f"already processing task {task.name!r}")
+        # fail if we're already processing the task
+        task.set_status(TaskStatus.STARTING, required_status=TaskStatus.NOT_STARTED)
 
         set_process_group()
-
-        task.status = TaskStatus.RUNNING
-
         smt_file = task.name
         for solver in self.solvers:
             command = SOLVERS[solver] + [smt_file]
@@ -257,6 +265,49 @@ class ProcessController:
             self.monitors.append(monitor)
             monitor.start()
 
+        # it's possible that some processes finished already and the status has switched
+        # to TERMINATING/TERMINATED, in that case we don't want to go back to RUNNING
+        task.set_status(TaskStatus.RUNNING, expected_status=TaskStatus.STARTING)
+
+
+    def _monitor_process(self, proc_meta: ProcessMetadata):
+        """Monitor the given process for completion.
+
+        :param proc_meta:
+            The process to monitor.
+        """
+
+        solver_name = proc_meta.solver_name
+        try:
+            # Wait for the process to complete
+            # [note](https://docs.python.org/3/library/asyncio-subprocess.html#asyncio.subprocess.Process)
+            #   the Process.wait() method is asynchronous,
+            #   whereas subprocess.Popen.wait() is implemented as a blocking busy loop;
+            task_status = self.task.status
+            if task_status == TaskStatus.STARTING:
+                logger.debug(f"starting {solver_name}")
+                proc_meta.process.start()
+                proc_meta.process.wait(timeout=(self.config.timeout_seconds or None))
+            else:
+                logger.debug(f"not starting {solver_name}, task is {task_status}")
+        except subprocess.TimeoutExpired:
+            logger.debug(f"timeout expired for {solver_name} on {proc_meta.task_name}")
+            proc_meta.has_timed_out = True
+
+            # spawn a killer thread
+            threading.Thread(target=self._kill_process, args=(proc_meta,)).start()
+        finally:
+            # Close the output and error files
+            proc_meta.output_file.close()
+
+            if proc_meta.error_file:
+                proc_meta.error_file.close()
+
+            # notify the controller that the process has finished
+            if proc_meta.done():
+                self._on_process_finished(proc_meta)
+
+
     def kill(self) -> bool:
         """Kill all processes associated with the current task.
 
@@ -267,12 +318,16 @@ class ProcessController:
         logger.debug("killing all processes")
 
         task = self.task
-        if task.status.value < TaskStatus.RUNNING.value:
-            logger.debug(f"can not kill task {task.name!r} with status {task.status!r}")
+
+        # atomic lookup of the task status (and acquire the lock only once)
+        task_status = task.status
+
+        if task_status.value < TaskStatus.RUNNING.value:
+            logger.debug(f"can not kill task {task.name!r} with status {task_status!r}")
             return False
 
-        if task.status.value >= TaskStatus.TERMINATING.value:
-            logger.debug(f"task {task.name!r} is already {task.status!r}")
+        if task_status.value >= TaskStatus.TERMINATING.value:
+            logger.debug(f"task {task.name!r} is already {task_status!r}")
             return False
 
         logger.debug(f"killing solvers for {task.name!r}")
@@ -298,48 +353,15 @@ class ProcessController:
             pool.append(killer)
             killer.start()
 
-        logger.debug("waiting for all killers to finish")
+        if pool:
+            logger.debug("waiting for all killers to finish")
+
         for killer in pool:
             killer.join()
 
         task.status = TaskStatus.TERMINATED
         return True
 
-    def _monitor_process(self, proc_meta: ProcessMetadata):
-        """Monitor the given process for completion.
-
-        :param proc_meta:
-            The process to monitor.
-        """
-
-        solver_name = proc_meta.solver_name
-        try:
-            # Wait for the process to complete
-            # [note](https://docs.python.org/3/library/asyncio-subprocess.html#asyncio.subprocess.Process)
-            #   the Process.wait() method is asynchronous,
-            #   whereas subprocess.Popen.wait() is implemented as a blocking busy loop;
-            if self.task.status == TaskStatus.RUNNING:
-                logger.debug(f"starting {solver_name}")
-                proc_meta.process.start()
-                proc_meta.process.wait(timeout=(self.config.timeout_seconds or None))
-            else:
-                logger.debug(f"not starting {solver_name}, task is {self.task.status}")
-        except subprocess.TimeoutExpired:
-            logger.debug(f"timeout expired for {solver_name} on {proc_meta.task_name}")
-            proc_meta.has_timed_out = True
-
-            # spawn a killer thread
-            threading.Thread(target=self._kill_process, args=(proc_meta,)).start()
-        finally:
-            # Close the output and error files
-            proc_meta.output_file.close()
-
-            if proc_meta.error_file:
-                proc_meta.error_file.close()
-
-            # notify the controller that the process has finished
-            if proc_meta.done():
-                self._on_process_finished(proc_meta)
 
     def _kill_process(self, proc_meta: ProcessMetadata):
         process = proc_meta.process

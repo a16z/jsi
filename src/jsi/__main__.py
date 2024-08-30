@@ -15,7 +15,7 @@ from typing import Any
 import click
 from loguru import logger
 
-from jsi.core import SOLVERS, Config, ProcessController, Task, TaskResult
+from jsi.core import SOLVERS, Config, ProcessController, Task, TaskResult, TaskStatus
 from jsi.utils import Supervisor
 
 
@@ -65,6 +65,10 @@ def main(file: pathlib.Path) -> int:
     try:
         # start the solver processes
         controller.start()
+
+        # wait for the solver processes to start, we need the PIDs for the supervisor
+        while controller.task.status.value < TaskStatus.RUNNING.value:
+            pass
 
         # start a supervisor process in daemon mode so that it does not block
         # the program from exiting
