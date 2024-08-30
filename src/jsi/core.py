@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import enum
 import io
+import os
 import pathlib
 import subprocess
 import threading
@@ -170,7 +171,7 @@ class Task:
     def status(self, new_status: TaskStatus):
         with self._lock:
             if new_status.value < self._status.value:
-                raise ValueError(f"can switch from {self._status} to {new_status}")
+                raise ValueError(f"can not switch from {self._status} to {new_status}")
 
             logger.debug(f"setting status to {new_status}")
             self._status = new_status
@@ -204,6 +205,12 @@ class Task:
             self._result = result
 
 
+def set_process_group():
+    # with suppress(AttributeError, ImportError):
+    logger.debug("setting process group")
+    os.setpgrp()
+
+
 @dataclass(frozen=True)
 class ProcessController:
     config: Config
@@ -220,6 +227,8 @@ class ProcessController:
 
         if task.status != TaskStatus.NOT_STARTED:
             raise RuntimeError(f"already processing task {task.name!r}")
+
+        set_process_group()
 
         task.status = TaskStatus.RUNNING
 
@@ -258,6 +267,10 @@ class ProcessController:
         task = self.task
         if task.status.value < TaskStatus.RUNNING.value:
             logger.debug(f"can not kill task {task.name!r} with status {task.status!r}")
+            return False
+
+        if task.status.value >= TaskStatus.TERMINATING.value:
+            logger.debug(f"task {task.name!r} is already {task.status!r}")
             return False
 
         logger.debug(f"killing solvers for {task.name!r}")

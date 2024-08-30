@@ -16,5 +16,7 @@ loguru==0.7.2
     # via jsi
 nodeenv==1.9.1
     # via pyright
+psutil==6.0.0
+    # via jsi
 pyright==1.1.378
     # via jsi

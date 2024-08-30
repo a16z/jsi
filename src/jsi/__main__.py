@@ -4,26 +4,19 @@ Usage:
     python -m jsi [options] <path/to/query.smt2>
 """
 
-import contextlib
+import atexit
+import os
 import pathlib
-import sys
 import signal
+import sys
 import threading
-import time
 from typing import Any
 
 import click
 from loguru import logger
 
-from jsi.core import Config, ProcessController, SOLVERS, Task, TaskResult
-
-
-@contextlib.contextmanager
-def timer(description: str):
-    start = time.perf_counter()
-    yield
-    elapsed = time.perf_counter() - start
-    logger.trace(f"{description}: {elapsed:.3f}s")
+from jsi.core import SOLVERS, Config, ProcessController, Task, TaskResult
+from jsi.utils import Supervisor
 
 
 @click.command()
@@ -47,8 +40,10 @@ def main(file: pathlib.Path) -> int:
 
     def signal_handler():
         event.wait()
+        cleanup()
+
+    def cleanup():
         controller.kill_task()
-        sys.exit(1)
 
     # register the signal listener
     for signum in [
@@ -63,8 +58,19 @@ def main(file: pathlib.Path) -> int:
     thread = threading.Thread(target=signal_handler)
     thread.start()
 
+    # also register the cleanup function to be called on exit
+    atexit.register(cleanup)
+
     try:
+        # start the solver processes
         controller.start()
+
+        # start a supervisor process
+        child_pids = [proc_meta.process.pid for proc_meta in controller.task.processes]
+        supervisor = Supervisor(os.getpid(), child_pids)
+        supervisor.start()
+
+        # wait for the solver processes to finish
         controller.join()
 
         click.echo(task.result.value)
