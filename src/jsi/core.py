@@ -5,10 +5,10 @@ import enum
 import io
 import os
 import pathlib
-import subprocess
 import threading
 import time
 from dataclasses import dataclass, field
+from subprocess import Popen, TimeoutExpired
 from typing import Any
 
 from loguru import logger
@@ -67,19 +67,35 @@ class Config:
     debug: bool = False
 
 
-class DelayedPopen:
-    def __init__(self, command: list[str], **kwargs: dict[str, Any]):
-        self.command = command
-        self.kwargs = kwargs
-        self.process = None
-        self.lock = threading.Lock()
+@dataclass(frozen=True)
+class Command:
+    """High level inputs for a command to be run by in a subprocess."""
 
-    def start(self):
+    args: list[str]
+    stdout: io.TextIOWrapper | None = None
+    stderr: io.TextIOWrapper | None = None
+
+    # extra arguments to pass to Popen
+    kwargs: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class DelayedPopen:
+    """A mutable class that:
+    - accepts a Command as input
+    - exposes synchronized access to a start() method
+    - proxies data access to the underlying Popen instance (once started)"""
+
+    command: Command
+    process: Popen[str] | None = None
+    lock: threading.Lock = threading.Lock()
+
+    def start(self) -> Popen[str]:
         with self.lock:
             if self.process is not None:
                 raise RuntimeError("Process already started")
 
-            self.process = subprocess.Popen(self.command, **self.kwargs)  # type: ignore
+            self.process = Popen(self.command, **self.kwargs)  # type: ignore
             return self.process
 
     def __getattr__(self, name: str) -> Any:
@@ -102,16 +118,18 @@ class DelayedPopen:
 
 @dataclass
 class ProcessMetadata:
-    solver_name: str
-    task_name: str
-    output_file: io.TextIOWrapper
-    error_file: io.TextIOWrapper | None
+    """Mutable class that keeps track of the state of a process metadata
+    such as start time, end time, whether it has timed out, etc."""
+
     process: DelayedPopen
     start_time: float = field(default_factory=time.time)
     end_time: float | None = None
     has_timed_out: bool = False
     on_kill_list: bool = False
     _result: str | None = None
+
+    def bin_name(self):
+        return self.process.command.args[0]
 
     def done(self):
         return self.process.is_started() and self.process.poll() is not None
@@ -134,7 +152,8 @@ class ProcessMetadata:
         if self.process.returncode == -15:
             return timeout if self.has_timed_out else killed
 
-        with open(self.output_file.name) as f:
+        # FIXME: currently assumes that stdout is a file
+        with open(self.process.stdout) as f:
             line = f.readline()
             if line == "sat\n":
                 return sat
@@ -160,6 +179,16 @@ class ProcessMetadata:
 
 @dataclass
 class Task:
+    """Mutable class that keeps track of a high level task (query to be solved),
+    involving potentially multiple solver subprocesses.
+
+    Exposes synchronization primitives and enforces valid state transitions:
+    NOT_STARTED → STARTING → RUNNING → TERMINATING → TERMINATED
+
+    It is possible to skip states forward, but going back is not possible, e.g.:
+    - STARTING → TERMINATING is allowed
+    - RUNNING → NOT_STARTED is not allowed"""
+
     name: str
     processes: list[ProcessMetadata] = field(default_factory=list)
     output: str | None = None
@@ -225,40 +254,40 @@ def set_process_group():
 
 @dataclass(frozen=True)
 class ProcessController:
-    config: Config
-    solvers: list[str]
+    """High level orchestration class that manages the lifecycle of a task
+    and its associated subprocesses.
+
+    Parameters:
+    - task: the task to be solved
+    - commands: the commands to use to solve the task
+    - config: the configuration for the controller
+    """
+
     task: Task
+    commands: list[Command]
+    config: Config
     monitors: list[threading.Thread] = field(default_factory=list)
 
-    def join(self):
-        for monitor in self.monitors:
-            monitor.join()
-
     def start(self):
+        """Start the task by spawning subprocesses for each command.
+
+        Can only be called once, and fails if the task is not in the NOT_STARTED state.
+
+        Transitions the task from NOT_STARTED → STARTING → RUNNING.
+
+        This does not block, the subprocesses are monitored in separate threads. In
+        order to wait for the task to finish, call join()."""
+
         task = self.task
 
         # fail if we're already processing the task
         task.set_status(TaskStatus.STARTING, required_status=TaskStatus.NOT_STARTED)
 
         set_process_group()
-        smt_file = task.name
-        for solver in self.solvers:
-            command = SOLVERS[solver] + [smt_file]
 
-            # the output file will be closed by the monitoring thread
-            output_file = open(f"{smt_file}.{solver}.out", "w")  # noqa: SIM115
-
-            # don't redirect stderr, so we can see error messages from solvers
-            proc = DelayedPopen(command, stdout=output_file)  # type: ignore
-
-            proc_meta = ProcessMetadata(
-                solver_name=solver,
-                task_name=smt_file,
-                output_file=output_file,
-                error_file=None,
-                process=proc,
-            )
-
+        for command in self.commands:
+            proc = DelayedPopen(command)
+            proc_meta = ProcessMetadata(process=proc,)
             task.processes.append(proc_meta)
 
             # spawn a thread that will monitor this process
@@ -277,7 +306,7 @@ class ProcessController:
             The process to monitor.
         """
 
-        solver_name = proc_meta.solver_name
+        bin_name = proc_meta.bin_name()
         try:
             # Wait for the process to complete
             # [note](https://docs.python.org/3/library/asyncio-subprocess.html#asyncio.subprocess.Process)
@@ -285,27 +314,35 @@ class ProcessController:
             #   whereas subprocess.Popen.wait() is implemented as a blocking busy loop;
             task_status = self.task.status
             if task_status == TaskStatus.STARTING:
-                logger.debug(f"starting {solver_name}")
+                logger.debug(f"starting {bin_name}")
                 proc_meta.process.start()
                 proc_meta.process.wait(timeout=(self.config.timeout_seconds or None))
             else:
-                logger.debug(f"not starting {solver_name}, task is {task_status}")
-        except subprocess.TimeoutExpired:
-            logger.debug(f"timeout expired for {solver_name} on {proc_meta.task_name}")
+                logger.debug(f"not starting {bin_name}, task is {task_status}")
+        except TimeoutExpired:
+            logger.debug(f"timeout expired for {bin_name}")
             proc_meta.has_timed_out = True
 
             # spawn a killer thread
             threading.Thread(target=self._kill_process, args=(proc_meta,)).start()
         finally:
             # Close the output and error files
-            proc_meta.output_file.close()
+            if stdout := proc_meta.process.stdout:
+                stdout.close()
 
-            if proc_meta.error_file:
-                proc_meta.error_file.close()
+            if stderr := proc_meta.process.stderr:
+                stderr.close()
 
             # notify the controller that the process has finished
             if proc_meta.done():
                 self._on_process_finished(proc_meta)
+
+    def join(self):
+        # TODO: add a timeout to avoid hanging forever
+        # TODO: what if the monitors have not be started yet?
+        # TODO: enforce specific task status?
+        for monitor in self.monitors:
+            monitor.join()
 
     def kill(self) -> bool:
         """Kill all processes associated with the current task.
@@ -334,19 +371,20 @@ class ProcessController:
         pool: list[threading.Thread] = []
 
         for proc_meta in task.processes:
+            bin_name = proc_meta.bin_name()
             if not proc_meta.process.is_started():
-                logger.debug(f"not killing unstarted process {proc_meta.solver_name}")
+                logger.debug(f"not killing unstarted process {bin_name}")
                 continue
 
             if proc_meta.on_kill_list:
-                logger.debug(f"{proc_meta.solver_name} already marked for killing")
+                logger.debug(f"{bin_name} already marked for killing")
                 continue
 
             if proc_meta.done():
-                logger.debug(f"{proc_meta.solver_name} already terminated")
+                logger.debug(f"{bin_name} already terminated")
                 continue
 
-            logger.debug(f"terminating {proc_meta.solver_name}")
+            logger.debug(f"terminating {bin_name}")
             proc_meta.on_kill_list = True
             killer = threading.Thread(target=self._kill_process, args=(proc_meta,))
             pool.append(killer)
@@ -370,7 +408,7 @@ class ProcessController:
         grace_period_seconds = 1
         try:
             process.wait(timeout=grace_period_seconds)
-        except subprocess.TimeoutExpired:
+        except TimeoutExpired:
             if process.poll() is None:
                 logger.debug(
                     f"process {process!r} still running after {grace_period_seconds}s"
@@ -387,7 +425,7 @@ class ProcessController:
         # only log "natural" exits, ignore kills
         if not proc_meta.on_kill_list:
             logger.info(
-                f"{proc_meta.solver_name} returned {exitcode} in {elapsed:.2f}s"
+                f"{proc_meta.bin_name()} returned {exitcode} in {elapsed:.2f}s"
             )
 
         if (
@@ -398,17 +436,3 @@ class ProcessController:
             self.kill()
             logger.debug(f"setting result to {proc_meta.result()}")
             self.task.result = proc_meta.result()
-
-
-def solve(
-    smtfile: pathlib.Path, config: Config | None = None
-) -> tuple[TaskResult, str]:
-    if config is None:
-        config = Config()
-
-    task = Task(name=str(smtfile))
-    controller = ProcessController(config, list(SOLVERS.keys()), task)
-    controller.start()
-    controller.join()
-
-    return controller.task.result, ""

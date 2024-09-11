@@ -41,6 +41,7 @@ class Supervisor(multiprocessing.Process):
 
         logger.debug(f"supervisor started (PID: {self.pid})")
         logger.debug(f"watching parent (PID: {self.parent_pid})")
+        logger.debug(f"watching children (PID: {self.child_pids})")
 
         last_message_time = time.time()
         try:

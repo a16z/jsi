@@ -15,7 +15,7 @@ from typing import Any
 import click
 from loguru import logger
 
-from jsi.core import SOLVERS, Config, ProcessController, Task, TaskResult, TaskStatus
+from jsi.core import SOLVERS, Command, Config, ProcessController, Task, TaskResult, TaskStatus
 from jsi.utils import Supervisor
 
 logger.disable("jsi")
@@ -23,21 +23,24 @@ logger.disable("jsi")
 
 @click.command()
 @click.version_option()
+@click.option("--timeout", type=float, help="timeout in seconds", default=0)
+@click.option("--debug", type=bool, help="enable debug logging", is_flag=True)
 @click.argument(
     "file",
     type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
     required=True,
 )
-@click.option("--timeout", type=float, help="timeout in seconds", default=0)
-@click.option("--debug", type=bool, help="enable debug logging", is_flag=True)
 def main(file: pathlib.Path, timeout: float, debug: bool) -> int:
     if debug:
         logger.enable("jsi")
 
     config = Config(timeout_seconds=timeout, debug=debug)
-    task = Task(name=str(file))
-    controller = ProcessController(config, list(SOLVERS.keys()), task)
+    filename = str(file)
+    task = Task(name=filename)
 
+    # TODO: stdout, stderr redirects
+    commands = [Command(cmd + [filename]) for cmd in SOLVERS.values()]
+    controller = ProcessController(task, commands, config)
     event = threading.Event()
 
     def signal_listener(signum: int, frame: Any | None = None):
