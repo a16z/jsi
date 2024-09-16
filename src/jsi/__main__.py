@@ -15,7 +15,15 @@ from typing import Any
 import click
 from loguru import logger
 
-from jsi.core import SOLVERS, Command, Config, ProcessController, Task, TaskResult, TaskStatus
+from jsi.core import (
+    SOLVERS,
+    Command,
+    Config,
+    ProcessController,
+    Task,
+    TaskResult,
+    TaskStatus,
+)
 from jsi.utils import Supervisor
 
 logger.disable("jsi")
@@ -35,11 +43,14 @@ def main(file: pathlib.Path, timeout: float, debug: bool) -> int:
         logger.enable("jsi")
 
     config = Config(timeout_seconds=timeout, debug=debug)
-    filename = str(file)
-    task = Task(name=filename)
+    task = Task(name=str(file))
 
     # TODO: stdout, stderr redirects
-    commands = [Command(cmd + [filename]) for cmd in SOLVERS.values()]
+    commands = [
+        Command(executable=cmd[0], args=cmd[1:], input_file=file)
+        for cmd in SOLVERS.values()
+    ]
+
     controller = ProcessController(task, commands, config)
     event = threading.Event()
 
