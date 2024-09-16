@@ -139,22 +139,37 @@ class Command:
     _lock: threading.Lock = threading.Lock()
     _result: str | None = None
 
+    # to facilitate testing
+    start_delay_ms: int = 0
+
     def parts(self) -> list[str]:
         parts = [self.executable, *self.args]
         if self.input_file:
             parts.append(str(self.input_file))
         return parts
 
-    def start(self) -> Popen[str]:
+    def start(self) -> None:
+        logger.debug(f"in {self.bin_name()}.start()")
+
         with self._lock:
             if self._process is not None:
                 raise RuntimeError("Process already started")
 
-            self._process = Popen(
-                self.parts(), **self.kwargs, stdout=self.stdout, stderr=self.stderr
-            )  # type: ignore
+            if self.start_delay_ms:
+                # kick off a thread that will wait and then start the process
+                start_delay_ms = self.start_delay_ms
+                self.start_delay_ms = 0
 
-        return self._process
+                logger.debug(
+                    f"delaying start of {self.bin_name()} by {start_delay_ms}ms"
+                )
+                timer = threading.Timer(start_delay_ms / 1000, self.start)
+                timer.start()
+            else:
+                logger.debug(f"starting {self.bin_name()}")
+                self._process = Popen(
+                    self.parts(), **self.kwargs, stdout=self.stdout, stderr=self.stderr
+                )  # type: ignore
 
     def __getattr__(self, name: str) -> Any:
         # if the attribute exists in the current instance, return it
