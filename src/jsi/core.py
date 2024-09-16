@@ -1,7 +1,7 @@
 # postpone the evaluation of annotations, treating them as strings at runtime
 from __future__ import annotations
 
-import enum
+import contextlib
 import io
 import os
 import pathlib
@@ -9,6 +9,7 @@ import threading
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from enum import Enum
 from subprocess import Popen, TimeoutExpired
 from typing import Any
 
@@ -35,7 +36,28 @@ SOLVERS = {
 }
 
 
-class TaskResult(enum.Enum):
+def try_closing(file: Any):
+    if hasattr(file, "close"):
+        with contextlib.suppress(Exception):
+            file.close()
+
+
+def first_line(file: Any) -> str:
+    try:
+        if hasattr(file, "seekable") and file.seekable():
+            file.seek(0)
+        first_line = file.readline()
+    except io.UnsupportedOperation:
+        # If seeking fails, try reading without seeking
+        first_line = file.readline()
+
+    if isinstance(first_line, bytes):
+        first_line = first_line.decode("utf-8")
+
+    return first_line
+
+
+class TaskResult(Enum):
     SAT = sat
     UNSAT = unsat
     ERROR = error
@@ -44,7 +66,7 @@ class TaskResult(enum.Enum):
     KILLED = killed
 
 
-class TaskStatus(enum.Enum):
+class TaskStatus(Enum):
     NOT_STARTED = 1
 
     # transition state while processes are being started
@@ -59,6 +81,26 @@ class TaskStatus(enum.Enum):
 
     # all processes have terminated
     TERMINATED = 5
+
+    def __ge__(self, other: TaskStatus):
+        if self.__class__ is other.__class__:
+            return self.value >= other.value
+        return NotImplemented
+
+    def __gt__(self, other: TaskStatus):
+        if self.__class__ is other.__class__:
+            return self.value > other.value
+        return NotImplemented
+
+    def __le__(self, other: TaskStatus):
+        if self.__class__ is other.__class__:
+            return self.value <= other.value
+        return NotImplemented
+
+    def __lt__(self, other: TaskStatus):
+        if self.__class__ is other.__class__:
+            return self.value < other.value
+        return NotImplemented
 
 
 @dataclass(frozen=True)
@@ -120,7 +162,7 @@ class Command:
             return self.__dict__[name]
 
         # otherwise, proxy to the underlying Popen instance (once started)
-        if not self.is_started():
+        if not self.started():
             raise RuntimeError("Process not started. Call start() first.")
 
         return getattr(self._process, name)
@@ -138,7 +180,7 @@ class Command:
     def done(self):
         return self._process is not None and self._process.poll() is not None
 
-    def is_started(self):
+    def started(self):
         return self._process is not None
 
     def _ensure_finished(self):
@@ -146,6 +188,7 @@ class Command:
             raise ValueError(f"process {self.process!r} is still running")
 
     def ok(self):
+        """Throws if not done. Returns True if the process return sat or unsat."""
         self._ensure_finished()
 
         # unfortunately can't just use returncode == 0 here because:
@@ -156,26 +199,33 @@ class Command:
         return self.result() in (TaskResult.SAT, TaskResult.UNSAT)
 
     def _get_result(self):
-        if self.process.returncode == -15:
+        if self._process is None:
+            raise RuntimeError("Process not started")
+
+        if self._process.returncode == -15:
             return timeout if self.has_timed_out else killed
 
         # FIXME: currently assumes that stdout is a file
-        with open(self.process.stdout) as f:
-            line = f.readline()
-            if line == "sat\n":
-                return sat
-            elif line == "unsat\n":
-                return unsat
-            elif "error" in line:
-                return error
-            elif "ASSERT(" in line:
-                # stp may not return sat as the first line
-                # when there is a counterexample
-                return sat
-            elif self.has_timed_out:
-                return timeout
-            else:
-                return unknown
+        stdout = self._process.stdout
+
+        if not stdout:
+            raise RuntimeError("no stdout")
+
+        line = first_line(stdout)
+        if line == "sat\n":
+            return sat
+        elif line == "unsat\n":
+            return unsat
+        elif "error" in line:
+            return error
+        elif "ASSERT(" in line:
+            # stp may not return sat as the first line
+            # when there is a counterexample
+            return sat
+        elif self.has_timed_out:
+            return timeout
+        else:
+            return unknown
 
     def result(self) -> TaskResult:
         self._ensure_finished()
@@ -211,7 +261,7 @@ class Task:
     @status.setter
     def status(self, new_status: TaskStatus):
         with self._lock:
-            if new_status.value < self._status.value:
+            if new_status < self._status:
                 raise ValueError(f"can not switch from {self._status} to {new_status}")
 
             logger.debug(f"setting status to {new_status}")
@@ -225,7 +275,7 @@ class Task:
     ):
         with self._lock:
             status = self._status
-            if new_status.value < status.value:
+            if new_status < status:
                 raise ValueError(f"can not switch from {status} to {new_status}")
 
             # hard error
@@ -285,9 +335,11 @@ class ProcessController:
         This does not block, the subprocesses are monitored in separate threads. In
         order to wait for the task to finish, call join()."""
 
-        task = self.task
+        if not self.commands:
+            raise RuntimeError("No commands to run")
 
         # fail if we're already processing the task
+        task = self.task
         task.set_status(TaskStatus.STARTING, required_status=TaskStatus.NOT_STARTED)
 
         set_process_group()
@@ -320,8 +372,8 @@ class ProcessController:
             task_status = self.task.status
             if task_status == TaskStatus.STARTING:
                 logger.debug(f"starting {bin_name}")
-                command.process.start()
-                command.process.wait(timeout=(self.config.timeout_seconds or None))
+                command.start()
+                command.wait(timeout=(self.config.timeout_seconds or None))
             else:
                 logger.debug(f"not starting {bin_name}, task is {task_status}")
         except TimeoutExpired:
@@ -332,14 +384,11 @@ class ProcessController:
             threading.Thread(target=self._kill_process, args=(command,)).start()
         finally:
             # Close the output and error files
-            if stdout := command.process.stdout:
-                stdout.close()
-
-            if stderr := command.process.stderr:
-                stderr.close()
+            try_closing(command.stdout)
+            try_closing(command.stderr)
 
             # notify the controller that the process has finished
-            if command.done():
+            if command.started() and command.done():
                 self._on_process_finished(command)
 
     def join(self):
@@ -377,7 +426,7 @@ class ProcessController:
 
         for command in task.processes:
             bin_name = command.bin_name()
-            if not command.process.is_started():
+            if not command.started():
                 logger.debug(f"not killing unstarted process {bin_name}")
                 continue
 
@@ -405,37 +454,48 @@ class ProcessController:
         return True
 
     def _kill_process(self, command: Command):
-        process = command.process
-        if process.poll() is None:
-            process.terminate()
+        if not command.done():
+            command.terminate()
 
         # Wait for process to terminate gracefully
         grace_period_seconds = 1
         try:
-            process.wait(timeout=grace_period_seconds)
+            command.wait(timeout=grace_period_seconds)
         except TimeoutExpired:
-            if process.poll() is None:
-                logger.debug(
-                    f"process {process!r} still running after {grace_period_seconds}s"
-                )
-                process.kill()
+            if command.done():
+                return
+
+            logger.debug(f"{command!r} still running after {grace_period_seconds}s")
+            command.kill()
 
     def _on_process_finished(self, command: Command):
         # Update the end_time in command
         command.end_time = time.time()
 
         elapsed = command.end_time - command.start_time
-        exitcode = command.process.returncode
+        exitcode = command.returncode
 
         # only log "natural" exits, ignore kills
         if not command.on_kill_list:
             logger.info(f"{command.bin_name()} returned {exitcode} in {elapsed:.2f}s")
 
+        task = self.task
         if (
             command.ok()
             and self.config.early_exit
-            and self.task.status.value < TaskStatus.TERMINATED.value
+            and task.status < TaskStatus.TERMINATED
         ):
             self.kill()
             logger.debug(f"setting result to {command.result()}")
-            self.task.result = command.result()
+            task.result = command.result()
+
+        # we could be in STARTING or TERMINATING here
+        if task.status != TaskStatus.RUNNING:
+            return
+
+        # check if all commands have finished
+        if all(command.started() and command.done() for command in task.processes):
+            task.set_status(TaskStatus.TERMINATED)
+            # set task result if it is not already set
+            if task.result is TaskResult.UNKNOWN:
+                task.result = command.result()
