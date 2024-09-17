@@ -7,7 +7,17 @@ import psutil
 import pytest
 from loguru import logger
 
-from jsi.core import Command, Config, ProcessController, Task, TaskResult, TaskStatus
+from jsi.core import (
+    Command,
+    Config,
+    ProcessController,
+    Task,
+    TaskResult,
+    TaskStatus,
+    sat,
+    unknown,
+    unsat,
+)
 
 # enable debug logging
 logger.enable("jsi")
@@ -49,8 +59,8 @@ def test_real_process():
     stdout, stderr = command.communicate(timeout=0.01)
 
     assert command.returncode == 0
-    assert stdout.decode("utf-8").strip() == "hello world"
-    assert stderr is None
+    assert stdout.strip() == "hello world"
+    assert not stderr
 
 
 def test_mock_process():
@@ -77,8 +87,8 @@ def test_mock_process_options():
     print(f"{stderr=}")
 
     assert command.returncode == 42
-    assert stdout.decode("utf-8").strip() == "beep"
-    assert stderr.decode("utf-8").strip() == "boop"
+    assert stdout.strip() == "beep"
+    assert stderr.strip() == "boop"
 
 
 def test_mock_process_timeout():
@@ -168,9 +178,17 @@ def test_controller_start_empty_commands():
         controller.start()
 
 
-def test_controller_start_and_join():
+@pytest.mark.parametrize(
+    "command,expected",
+    [
+        (mock_process(sleep_ms=0, stdout="beep boop"), unknown),
+        (mock_process(sleep_ms=0, stdout="", exit_code=1), unknown),
+        (mock_process(sleep_ms=100, stdout=sat, exit_code=1), sat),
+        (mock_process(sleep_ms=100, stdout=unsat), unsat),
+    ],
+)
+def test_controller_start_single_command_and_join(command: Command, expected: str):
     # returns immediately, non-SMT result
-    command = mock_process(sleep_ms=0, stdout="beep boop")
     task = Task(name="test")
 
     controller = ProcessController(task=task, commands=[command], config=Config())
@@ -181,6 +199,5 @@ def test_controller_start_and_join():
     assert task.status >= TaskStatus.STARTING
     assert command.started()
     assert command.done()
-    assert command.returncode == 0
     assert task.status is TaskStatus.TERMINATED
-    assert task.result == command.result() == TaskResult.UNKNOWN
+    assert task.result == command.result() == TaskResult(expected)

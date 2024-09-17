@@ -171,16 +171,16 @@ class Command:
                     self.parts(), **self.kwargs, stdout=self.stdout, stderr=self.stderr
                 )  # type: ignore
 
-    def __getattr__(self, name: str) -> Any:
-        # if the attribute exists in the current instance, return it
-        if name in self.__dict__:
-            return self.__dict__[name]
+    # def __getattr__(self, name: str) -> Any:
+    #     # if the attribute exists in the current instance, return it
+    #     if name in self.__dict__:
+    #         return self.__dict__[name]
 
-        # otherwise, proxy to the underlying Popen instance (once started)
-        if not self.started():
-            raise RuntimeError("Process not started. Call start() first.")
+    #     # otherwise, proxy to the underlying Popen instance (once started)
+    #     if not self.started():
+    #         raise RuntimeError("Process not started. Call start() first.")
 
-        return getattr(self._process, name)
+    #     return getattr(self._process, name)
 
     def wait(self, timeout: float | None = None):
         # skip waiting if the process is not started
@@ -198,9 +198,15 @@ class Command:
     def started(self):
         return self._process is not None
 
+    def _ensure_started(self):
+        if not self.started():
+            raise RuntimeError(f"Process not started: {self.bin_name()}")
+
     def _ensure_finished(self):
+        self._ensure_started()
+
         if not self.done():
-            raise ValueError(f"process {self.process!r} is still running")
+            raise RuntimeError(f"Process still running: {self._process!r}")
 
     def ok(self):
         """Throws if not done. Returns True if the process return sat or unsat."""
@@ -247,6 +253,45 @@ class Command:
         if self._result is None:
             self._result = self._get_result()
         return TaskResult(self._result)
+
+    #
+    # pass through methods for Popen
+    #
+
+    def communicate(
+        self,
+        input: str | None = None,  # noqa: A002
+        timeout: float | None = None,
+    ) -> tuple[str, str]:
+        assert self._process is not None
+        stdout, stderr = self._process.communicate(input, timeout)
+
+        return (
+            (stdout.decode("utf-8") if isinstance(stdout, bytes) else stdout) or "",
+            (stderr.decode("utf-8") if isinstance(stderr, bytes) else stderr) or "",
+        )
+
+    def terminate(self):
+        self._ensure_started()
+        assert self._process is not None
+        self._process.terminate()
+
+    def kill(self):
+        self._ensure_started()
+        assert self._process is not None
+        self._process.kill()
+
+    @property
+    def returncode(self):
+        self._ensure_finished()
+        assert self._process is not None
+        return self._process.returncode
+
+    @property
+    def pid(self):
+        self._ensure_started()
+        assert self._process is not None
+        return self._process.pid
 
 
 @dataclass

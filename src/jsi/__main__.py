@@ -93,7 +93,7 @@ def main(file: pathlib.Path, timeout: float, debug: bool) -> int:
 
         # start a supervisor process in daemon mode so that it does not block
         # the program from exiting
-        child_pids = [proc_meta.process.pid for proc_meta in controller.task.processes]
+        child_pids = [command.pid for command in controller.commands]
         supervisor = Supervisor(os.getpid(), child_pids, debug=config.debug)
         supervisor.daemon = True
         supervisor.start()
