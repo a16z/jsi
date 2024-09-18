@@ -129,7 +129,7 @@ class Command:
     kwargs: dict[str, Any] = field(default_factory=dict)
 
     # metadata
-    start_time: float = field(default_factory=time.time)
+    start_time: float | None = None
     end_time: float | None = None
     has_timed_out: bool = False
     on_kill_list: bool = False
@@ -149,38 +149,25 @@ class Command:
         return parts
 
     def start(self) -> None:
-        logger.debug(f"in {self.bin_name()}.start()")
-
         with self._lock:
             if self._process is not None:
                 raise RuntimeError("Process already started")
 
             if self.start_delay_ms:
                 # kick off a thread that will wait and then start the process
-                start_delay_ms = self.start_delay_ms
+                delay = self.start_delay_ms
                 self.start_delay_ms = 0
 
-                logger.debug(
-                    f"delaying start of {self.bin_name()} by {start_delay_ms}ms"
-                )
-                timer = threading.Timer(start_delay_ms / 1000, self.start)
+                logger.debug(f"delaying start of {self.bin_name()} by {delay}ms")
+                timer = threading.Timer(delay / 1000, self.start)
+                timer.daemon = True  # don't block the program from exiting
                 timer.start()
             else:
                 logger.debug(f"starting {self.bin_name()}")
+                self.start_time = time.time()
                 self._process = Popen(
                     self.parts(), **self.kwargs, stdout=self.stdout, stderr=self.stderr
                 )  # type: ignore
-
-    # def __getattr__(self, name: str) -> Any:
-    #     # if the attribute exists in the current instance, return it
-    #     if name in self.__dict__:
-    #         return self.__dict__[name]
-
-    #     # otherwise, proxy to the underlying Popen instance (once started)
-    #     if not self.started():
-    #         raise RuntimeError("Process not started. Call start() first.")
-
-    #     return getattr(self._process, name)
 
     def wait(self, timeout: float | None = None):
         # skip waiting if the process is not started
@@ -197,6 +184,16 @@ class Command:
 
     def started(self):
         return self._process is not None
+
+    def elapsed(self) -> float | None:
+        """Returns the elapsed time in seconds.
+
+        Returns None if the process has not started or not finished."""
+
+        if not self.end_time or not self.start_time:
+            return None
+
+        return self.end_time - self.start_time
 
     def _ensure_started(self):
         if not self.started():
@@ -554,7 +551,7 @@ class ProcessController:
             return
 
         # check if all commands have finished
-        if all(command.started() and command.done() for command in task.processes):
+        if all(command.done() for command in task.processes):
             task.set_status(TaskStatus.TERMINATED)
             # set task result if it is not already set
             if task.result is TaskResult.UNKNOWN:

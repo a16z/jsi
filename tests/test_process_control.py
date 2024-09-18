@@ -23,7 +23,7 @@ from jsi.core import (
 logger.enable("jsi")
 
 
-def mock_process(
+def cmd(
     sleep_ms: int = 0,
     exit_code: int = 0,
     stdout: str = "",
@@ -63,8 +63,8 @@ def test_real_process():
     assert not stderr
 
 
-def test_mock_process():
-    command = mock_process()
+def test_cmd():
+    command = cmd()
     command.start()
     stdout, stderr = command.communicate(timeout=0.1)
 
@@ -73,8 +73,8 @@ def test_mock_process():
     assert not stderr
 
 
-def test_mock_process_options():
-    command = mock_process(
+def test_cmd_options():
+    command = cmd(
         sleep_ms=10,
         exit_code=42,
         stdout="beep",
@@ -91,8 +91,8 @@ def test_mock_process_options():
     assert stderr.strip() == "boop"
 
 
-def test_mock_process_timeout():
-    command = mock_process(sleep_ms=1000)
+def test_cmd_timeout():
+    command = cmd(sleep_ms=1000)
     command.start()
     with pytest.raises(TimeoutExpired):
         command.communicate(timeout=0.001)
@@ -104,15 +104,15 @@ def test_mock_process_timeout():
     assert not stderr
 
 
-def test_mock_process_must_start_first():
-    command = mock_process()
+def test_cmd_must_start_first():
+    command = cmd()
 
     with pytest.raises(RuntimeError, match="Process not started"):
         command.kill()
 
 
-def test_mock_process_can_not_start_twice():
-    command = mock_process()
+def test_cmd_can_not_start_twice():
+    command = cmd()
 
     assert not command.started()
     command.start()
@@ -124,7 +124,7 @@ def test_mock_process_can_not_start_twice():
 
 def test_command_kill():
     # big enough that we would notice if it was not killed
-    command = mock_process(sleep_ms=60000)
+    command = cmd(sleep_ms=60000)
 
     # when we start it, the pid should exist
     command.start()
@@ -138,7 +138,7 @@ def test_command_kill():
 
 def test_delayed_start_mocked_time():
     with patch("threading.Timer") as mock_timer:  # type: ignore
-        command = mock_process(start_delay_ms=100)
+        command = cmd(start_delay_ms=100)
         command.start()
 
         # Check initial state
@@ -160,7 +160,7 @@ def test_delayed_start_mocked_time():
 
 @pytest.mark.slow
 def test_delayed_start_real_time():
-    command = mock_process(start_delay_ms=100)
+    command = cmd(start_delay_ms=100)
     command.start()
     assert not command.started()
     assert not command.done()
@@ -181,23 +181,100 @@ def test_controller_start_empty_commands():
 @pytest.mark.parametrize(
     "command,expected",
     [
-        (mock_process(sleep_ms=0, stdout="beep boop"), unknown),
-        (mock_process(sleep_ms=0, stdout="", exit_code=1), unknown),
-        (mock_process(sleep_ms=100, stdout=sat, exit_code=1), sat),
-        (mock_process(sleep_ms=100, stdout=unsat), unsat),
+        (cmd(sleep_ms=0, stdout="beep boop"), unknown),
+        (cmd(sleep_ms=0, stdout="", exit_code=1), unknown),
+        (cmd(sleep_ms=100, stdout=sat, exit_code=1), sat),
+        (cmd(sleep_ms=100, stdout=unsat), unsat),
     ],
 )
 def test_controller_start_single_command_and_join(command: Command, expected: str):
-    # returns immediately, non-SMT result
     task = Task(name="test")
-
     controller = ProcessController(task=task, commands=[command], config=Config())
 
     controller.start()
-    controller.join()
-
     assert task.status >= TaskStatus.STARTING
     assert command.started()
+
+    controller.join()
     assert command.done()
     assert task.status is TaskStatus.TERMINATED
     assert task.result == command.result() == TaskResult(expected)
+
+
+@pytest.mark.parametrize(
+    "command1,command2,expected",
+    [
+        # first command returns weird result fast, early exit not triggered
+        (cmd(stdout="beep boop"), cmd(sleep_ms=50, stdout="sat"), sat),
+
+        # first command errors fast, early exit not triggered
+        (cmd(stderr="error", exit_code=1), cmd(sleep_ms=50, stdout="unsat"), unsat),
+
+        # both commands return weird results
+        (cmd(stdout="beep beep"), cmd(stdout="boop boop"), unknown),
+
+        # one command is really slow, early sat exit triggered
+        (cmd(sleep_ms=5000, stdout="unsat"), cmd(sleep_ms=50, stdout="sat"), sat),
+
+        # one command is really slow, early unsat exit triggered
+        (cmd(sleep_ms=5000, stdout="sat"), cmd(sleep_ms=50, stdout="unsat"), unsat),
+
+        # early exit triggered even with strange exit code and stderr output
+        (cmd(sleep_ms=5000, stdout="unsat"), cmd(sleep_ms=50, stdout="sat"), sat),
+
+        # one command is really slow, early unsat exit triggered
+        (cmd(sleep_ms=5000, stdout="sat"), cmd(sleep_ms=50, stdout="unsat"), unsat),
+    ],
+)
+def test_controller_start_double_command_early_exit(
+    command1: Command, command2: Command, expected: str
+):
+    task = Task(name="test")
+    commands = [command1, command2]
+    config = Config(early_exit=True)
+    controller = ProcessController(task=task, commands=commands, config=config)
+
+    controller.start()
+    assert task.status >= TaskStatus.STARTING
+
+    controller.join()
+    assert command1.done()
+    assert command2.done()
+    assert task.status is TaskStatus.TERMINATED
+    assert task.result == TaskResult(expected)
+
+    # both commands should terminate "fast" (allow some wiggle room for slow CI)
+    assert (t1 := command1.elapsed()) and t1 < 1
+    assert (t2 := command2.elapsed()) and t2 < 1
+
+    # there should be no process left running
+    assert not psutil.pid_exists(command1.pid)
+    assert not psutil.pid_exists(command2.pid)
+
+
+def test_controller_early_exit_with_slow_start():
+    # command1 takes forever to even start
+    command1 = cmd(start_delay_ms=5000, stdout="unsat")
+
+    # command2 is fast and returns sat
+    command2 = cmd(sleep_ms=50, stdout="sat")
+
+    task = Task(name="test")
+    commands = [command1, command2]
+    config = Config(early_exit=True)
+    controller = ProcessController(task=task, commands=commands, config=config)
+
+    controller.start()
+    assert task.status >= TaskStatus.STARTING
+
+    controller.join()
+
+    # the task should be terminated, without even waiting for command1 to run
+    assert not command1.started()
+    assert command2.done()
+    assert task.status is TaskStatus.TERMINATED
+    assert task.result == TaskResult.SAT
+
+
+# TODO: test with no early exit
+# TODO: test with timeout (no successful result, successful result then kills, etc.)
