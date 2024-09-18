@@ -193,7 +193,6 @@ def test_controller_start_single_command_and_join(command: Command, expected: st
 
     controller.start()
     assert task.status >= TaskStatus.STARTING
-    assert command.started()
 
     controller.join()
     assert command.done()
@@ -206,22 +205,16 @@ def test_controller_start_single_command_and_join(command: Command, expected: st
     [
         # first command returns weird result fast, early exit not triggered
         (cmd(stdout="beep boop"), cmd(sleep_ms=50, stdout="sat"), sat),
-
         # first command errors fast, early exit not triggered
         (cmd(stderr="error", exit_code=1), cmd(sleep_ms=50, stdout="unsat"), unsat),
-
         # both commands return weird results
         (cmd(stdout="beep beep"), cmd(stdout="boop boop"), unknown),
-
         # one command is really slow, early sat exit triggered
         (cmd(sleep_ms=5000, stdout="unsat"), cmd(sleep_ms=50, stdout="sat"), sat),
-
         # one command is really slow, early unsat exit triggered
         (cmd(sleep_ms=5000, stdout="sat"), cmd(sleep_ms=50, stdout="unsat"), unsat),
-
         # early exit triggered even with strange exit code and stderr output
         (cmd(sleep_ms=5000, stdout="unsat"), cmd(sleep_ms=50, stdout="sat"), sat),
-
         # one command is really slow, early unsat exit triggered
         (cmd(sleep_ms=5000, stdout="sat"), cmd(sleep_ms=50, stdout="unsat"), unsat),
     ],

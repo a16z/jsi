@@ -529,7 +529,7 @@ class ProcessController:
         # Update the end_time in command
         command.end_time = time.time()
 
-        elapsed = command.end_time - command.start_time
+        elapsed = command.elapsed()
         exitcode = command.returncode
 
         # only log "natural" exits, ignore kills
