@@ -1,5 +1,5 @@
 import time
-from signal import SIGKILL
+from signal import SIGKILL, SIGTERM
 from subprocess import PIPE, TimeoutExpired
 from unittest.mock import patch
 
@@ -245,6 +245,33 @@ def test_controller_start_double_command_early_exit(
     assert not psutil.pid_exists(command2.pid)
 
 
+def test_controller_early_exit_with_slow_command():
+    command1 = cmd(sleep_ms=5000, stdout="unsat")
+    command2 = cmd(sleep_ms=0, stdout="sat")
+
+    task = Task(name="test")
+    commands = [command1, command2]
+    config = Config(early_exit=True)
+    controller = ProcessController(task=task, commands=commands, config=config)
+
+    controller.start()
+    assert task.status >= TaskStatus.STARTING
+
+    controller.join()
+
+    # verify that command1 was killed because of early exit
+    assert command1.done() and not command1.ok()
+    assert not command1.has_timed_out
+    assert command1.returncode == -SIGTERM
+    assert (t1 := command1.elapsed()) and t1 < 0.1
+
+    assert command2.done() and command2.ok()
+    assert (t2 := command2.elapsed()) and t2 < 0.1
+
+    assert task.status is TaskStatus.TERMINATED
+    assert task.result == TaskResult.SAT
+
+
 def test_controller_early_exit_with_slow_start():
     # command1 takes forever to even start
     command1 = cmd(start_delay_ms=5000, stdout="unsat")
@@ -274,13 +301,10 @@ def test_controller_early_exit_with_slow_start():
     [
         # first command returns sat result fast, still waits for second command
         (cmd(stdout=sat), cmd(start_delay_ms=50, sleep_ms=50, stdout=sat), sat),
-
         # first command returns unsat result fast, still waits for second command
         (cmd(stdout=unsat), cmd(start_delay_ms=50, sleep_ms=50, stdout=unsat), unsat),
-
         # commands return different results, first result is returned
         (cmd(stdout=sat), cmd(start_delay_ms=50, sleep_ms=50, stdout=unsat), sat),
-
         # both commands return weird results
         (cmd(stdout="beep"), cmd(stdout="boop"), unknown),
     ],

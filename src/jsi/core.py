@@ -138,10 +138,10 @@ class Command:
     _process: Popen[str] | None = None
     _lock: threading.Lock = threading.Lock()
     _result: str | None = None
-    _timer: threading.Timer | None = None
 
     # to facilitate testing
     start_delay_ms: int = 0
+    timer: threading.Timer | None = None
 
     def parts(self) -> list[str]:
         parts = [self.executable, *self.args]
@@ -163,7 +163,8 @@ class Command:
                 timer = threading.Timer(delay / 1000, self.start)
                 timer.daemon = True  # don't block the program from exiting
                 timer.start()
-                self._timer = timer
+                self.timer = timer
+
             else:
                 logger.debug(f"starting {self.bin_name()}")
                 self.start_time = time.time()
@@ -173,8 +174,13 @@ class Command:
 
     def wait(self, timeout: float | None = None):
         # wait if the process has a delayed start
-        if self._timer:
-            self._timer.join()
+        if self.timer:
+            while not self._process:
+                # if the process is marked for killing, stop waiting
+                if self.on_kill_list:
+                    break
+
+                time.sleep(0.01)
 
         # skip waiting if the process is not started
         if self._process is None:
@@ -488,12 +494,15 @@ class ProcessController:
 
         for command in task.processes:
             bin_name = command.bin_name()
-            if not command.started():
-                logger.debug(f"not killing unstarted process {bin_name}")
-                continue
-
             if command.on_kill_list:
                 logger.debug(f"{bin_name} already marked for killing")
+                continue
+
+            # mark the command for killing
+            command.on_kill_list = True
+
+            if not command.started():
+                logger.debug(f"not killing unstarted process {bin_name}")
                 continue
 
             if command.done():
@@ -501,7 +510,6 @@ class ProcessController:
                 continue
 
             logger.debug(f"terminating {bin_name}")
-            command.on_kill_list = True
             killer = threading.Thread(target=self._kill_process, args=(command,))
             pool.append(killer)
             killer.start()
