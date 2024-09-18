@@ -138,6 +138,7 @@ class Command:
     _process: Popen[str] | None = None
     _lock: threading.Lock = threading.Lock()
     _result: str | None = None
+    _timer: threading.Timer | None = None
 
     # to facilitate testing
     start_delay_ms: int = 0
@@ -162,6 +163,7 @@ class Command:
                 timer = threading.Timer(delay / 1000, self.start)
                 timer.daemon = True  # don't block the program from exiting
                 timer.start()
+                self._timer = timer
             else:
                 logger.debug(f"starting {self.bin_name()}")
                 self.start_time = time.time()
@@ -170,6 +172,10 @@ class Command:
                 )  # type: ignore
 
     def wait(self, timeout: float | None = None):
+        # wait if the process has a delayed start
+        if self._timer:
+            self._timer.join()
+
         # skip waiting if the process is not started
         if self._process is None:
             return
@@ -349,8 +355,7 @@ class Task:
 
     @property
     def result(self) -> TaskResult:
-        with self._lock:
-            return self._result or TaskResult.UNKNOWN
+        return self._result or TaskResult.UNKNOWN
 
     @result.setter
     def result(self, result: TaskResult):
@@ -536,15 +541,18 @@ class ProcessController:
         if not command.on_kill_list:
             logger.info(f"{command.bin_name()} returned {exitcode} in {elapsed:.2f}s")
 
+        # set task result if it is not already set
         task = self.task
+        if task.result is TaskResult.UNKNOWN:
+            logger.debug(f"setting result to {command.result()}")
+            task.result = command.result()
+
         if (
             command.ok()
             and self.config.early_exit
             and task.status < TaskStatus.TERMINATED
         ):
             self.kill()
-            logger.debug(f"setting result to {command.result()}")
-            task.result = command.result()
 
         # we could be in STARTING or TERMINATING here
         if task.status != TaskStatus.RUNNING:
@@ -553,6 +561,3 @@ class ProcessController:
         # check if all commands have finished
         if all(command.done() for command in task.processes):
             task.set_status(TaskStatus.TERMINATED)
-            # set task result if it is not already set
-            if task.result is TaskResult.UNKNOWN:
-                task.result = command.result()

@@ -24,7 +24,7 @@ wheels = [
 
 [[distribution]]
 name = "jsi"
-version = "0.1.dev21+g97aeae7.d20240918"
+version = "0.1.dev23+ga6f2f64.d20240918"
 source = { editable = "." }
 dependencies = [
     { name = "click" },

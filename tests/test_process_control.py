@@ -269,5 +269,41 @@ def test_controller_early_exit_with_slow_start():
     assert task.result == TaskResult.SAT
 
 
-# TODO: test with no early exit
+@pytest.mark.parametrize(
+    "command1,command2,expected",
+    [
+        # first command returns sat result fast, still waits for second command
+        (cmd(stdout=sat), cmd(start_delay_ms=50, sleep_ms=50, stdout=sat), sat),
+
+        # first command returns unsat result fast, still waits for second command
+        (cmd(stdout=unsat), cmd(start_delay_ms=50, sleep_ms=50, stdout=unsat), unsat),
+
+        # commands return different results, first result is returned
+        (cmd(stdout=sat), cmd(start_delay_ms=50, sleep_ms=50, stdout=unsat), sat),
+
+        # both commands return weird results
+        (cmd(stdout="beep"), cmd(stdout="boop"), unknown),
+    ],
+)
+def test_controller_no_early_exit(command1: Command, command2: Command, expected: str):
+    task = Task(name="test")
+    commands = [command1, command2]
+    config = Config(early_exit=False)
+    controller = ProcessController(task=task, commands=commands, config=config)
+
+    controller.start()
+    assert task.status >= TaskStatus.STARTING
+
+    controller.join()
+
+    assert task.status is TaskStatus.TERMINATED
+    assert task.result == TaskResult(expected)
+
+    for command in commands:
+        assert command.done()
+        assert not command.has_timed_out
+        assert command.returncode == 0
+        assert not psutil.pid_exists(command.pid)
+
+
 # TODO: test with timeout (no successful result, successful result then kills, etc.)
