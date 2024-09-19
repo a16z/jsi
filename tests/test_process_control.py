@@ -348,4 +348,3 @@ def test_controller_timeout_single_command():
 
     assert task.status is TaskStatus.TERMINATED
     assert task.result == TaskResult.TIMEOUT
-

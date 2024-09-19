@@ -457,11 +457,7 @@ class ProcessController:
         except TimeoutExpired:
             logger.debug(f"timeout expired for {command.bin_name()}")
             command.has_timed_out = True
-
-            # spawn a killer thread
-            killer = threading.Thread(target=self._kill_process, args=(command,))
-            killer.start()
-            killer.join()
+            self._kill_process(command)
         finally:
             exit_thread.join()
 
