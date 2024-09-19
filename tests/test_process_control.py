@@ -331,3 +331,21 @@ def test_controller_no_early_exit(command1: Command, command2: Command, expected
 
 
 # TODO: test with timeout (no successful result, successful result then kills, etc.)
+def test_controller_timeout_single_command():
+    task = Task(name="test")
+    command = cmd(sleep_ms=1000)
+
+    config = Config(early_exit=False, timeout_seconds=0.001)
+    controller = ProcessController(task=task, commands=[command], config=config)
+
+    controller.start()
+    controller.join()
+
+    assert command.done()
+    assert not psutil.pid_exists(command.pid)
+    assert command.has_timed_out
+    assert command.returncode == -SIGTERM
+
+    assert task.status is TaskStatus.TERMINATED
+    assert task.result == TaskResult.TIMEOUT
+

@@ -7,7 +7,7 @@ import os
 import pathlib
 import threading
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
 from subprocess import Popen, TimeoutExpired
@@ -187,6 +187,18 @@ class Command:
             return
 
         return self._process.wait(timeout)
+
+    def add_exit_callback(
+        self, callback: Callable[[Command], None]
+    ) -> threading.Thread:
+        def monitor():
+            self.wait()
+            callback(self)
+
+        thread = threading.Thread(target=monitor)
+        thread.daemon = True
+        thread.start()
+        return thread
 
     def bin_name(self):
         return self.executable
@@ -413,6 +425,8 @@ class ProcessController:
         set_process_group()
 
         for command in self.commands:
+            command.start()
+
             task.processes.append(command)
 
             # spawn a thread that will monitor this process
@@ -425,39 +439,31 @@ class ProcessController:
         task.set_status(TaskStatus.RUNNING, expected_status=TaskStatus.STARTING)
 
     def _monitor_process(self, command: Command):
-        """Monitor the given process for completion.
+        """Monitor the given process for completion, wait until configured timeout.
+
+        If the timeout is reached, a thread is spawned to kill the process.
 
         :param command:
             The process to monitor.
         """
+        exit_thread = command.add_exit_callback(self._on_process_finished)
 
-        bin_name = command.bin_name()
         try:
             # Wait for the process to complete
             # [note](https://docs.python.org/3/library/asyncio-subprocess.html#asyncio.subprocess.Process)
             #   the Process.wait() method is asynchronous,
             #   whereas subprocess.Popen.wait() is implemented as a blocking busy loop;
-            task_status = self.task.status
-            if task_status == TaskStatus.STARTING:
-                logger.debug(f"starting {bin_name}")
-                command.start()
-                command.wait(timeout=(self.config.timeout_seconds or None))
-            else:
-                logger.debug(f"not starting {bin_name}, task is {task_status}")
+            command.wait(timeout=(self.config.timeout_seconds or None))
         except TimeoutExpired:
-            logger.debug(f"timeout expired for {bin_name}")
+            logger.debug(f"timeout expired for {command.bin_name()}")
             command.has_timed_out = True
 
             # spawn a killer thread
-            threading.Thread(target=self._kill_process, args=(command,)).start()
+            killer = threading.Thread(target=self._kill_process, args=(command,))
+            killer.start()
+            killer.join()
         finally:
-            # Close the output and error files
-            try_closing(command.stdout)
-            try_closing(command.stderr)
-
-            # notify the controller that the process has finished
-            if command.started() and command.done():
-                self._on_process_finished(command)
+            exit_thread.join()
 
     def join(self):
         # TODO: add a timeout to avoid hanging forever
@@ -493,23 +499,6 @@ class ProcessController:
         pool: list[threading.Thread] = []
 
         for command in task.processes:
-            bin_name = command.bin_name()
-            if command.on_kill_list:
-                logger.debug(f"{bin_name} already marked for killing")
-                continue
-
-            # mark the command for killing
-            command.on_kill_list = True
-
-            if not command.started():
-                logger.debug(f"not killing unstarted process {bin_name}")
-                continue
-
-            if command.done():
-                logger.debug(f"{bin_name} already terminated")
-                continue
-
-            logger.debug(f"terminating {bin_name}")
             killer = threading.Thread(target=self._kill_process, args=(command,))
             pool.append(killer)
             killer.start()
@@ -524,15 +513,36 @@ class ProcessController:
         return True
 
     def _kill_process(self, command: Command):
-        if not command.done():
-            command.terminate()
+        logger.debug(f"_kill_process for {command.bin_name()}")
+
+        if command.on_kill_list:
+            logger.debug(f"{command.bin_name()} already on kill list")
+            return
+
+        # mark the command for killing
+        # this is important even for unstarted commands, it marks that
+        # the command is being killed and monitors can stop waiting for termination
+        command.on_kill_list = True
+
+        if not command.started():
+            logger.debug(f"no need to kill {command.bin_name()}, not started yet")
+            return
+
+        if command.done():
+            logger.debug(f"{command.bin_name()} already terminated")
+            return
+
+        logger.debug(f"terminating {command.bin_name()}")
+        command.terminate()
 
         # Wait for process to terminate gracefully
         grace_period_seconds = 1
         try:
+            logger.debug(f"waiting for {command.bin_name()} to terminate gracefully")
             command.wait(timeout=grace_period_seconds)
         except TimeoutExpired:
             if command.done():
+                logger.debug(f"{command.bin_name()} terminated gracefully")
                 return
 
             logger.debug(f"{command!r} still running after {grace_period_seconds}s")
@@ -542,29 +552,32 @@ class ProcessController:
         # Update the end_time in command
         command.end_time = time.time()
 
-        elapsed = command.elapsed()
-        exitcode = command.returncode
+        # Close the output and error files
+        try_closing(command.stdout)
+        try_closing(command.stderr)
 
-        # only log "natural" exits, ignore kills
-        if not command.on_kill_list:
+        task = self.task
+
+        if command.started():
+            elapsed = command.elapsed()
+            exitcode = command.returncode
             logger.info(f"{command.bin_name()} returned {exitcode} in {elapsed:.2f}s")
 
-        # set task result if it is not already set
-        task = self.task
-        if task.result is TaskResult.UNKNOWN:
-            logger.debug(f"setting result to {command.result()}")
-            task.result = command.result()
+            # set task result if it is not already set
+            if task.result is TaskResult.UNKNOWN:
+                logger.debug(f"setting result to {command.result()}")
+                task.result = command.result()
 
-        if (
-            command.ok()
-            and self.config.early_exit
-            and task.status < TaskStatus.TERMINATED
-        ):
-            self.kill()
+            if (
+                command.ok()
+                and self.config.early_exit
+                and task.status < TaskStatus.TERMINATED
+            ):
+                self.kill()
 
-        # we could be in STARTING or TERMINATING here
-        if task.status != TaskStatus.RUNNING:
-            return
+            # we could be in STARTING or TERMINATING here
+            if task.status != TaskStatus.RUNNING:
+                return
 
         # check if all commands have finished
         if all(command.done() for command in task.processes):

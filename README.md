@@ -12,24 +12,6 @@ uv tool install jsi
 jsi --help
 ```
 
-## Useful tips
-
-### Customize logging output
-
-```sh
-# in particular, the TRACE level is useful to see the time taken by each step
-LOGURU_LEVEL=TRACE jsi
-
-# disable all logs
-LOGURU_AUTOINIT=false jsi
-```
-
-### Redirect log output
-
-```sh
-jsi 2&> logs.txt
-```
-
 
 ## Development
 
@@ -51,6 +33,25 @@ rye run jsi --help
 
 # run it without rye
 python -m jsi --help
+
+# run a single test
+uv run pytest -v -k <test_name>
+```
+
+### Customize logging output
+
+```sh
+# in particular, the TRACE level is useful to see the time taken by each step
+LOGURU_LEVEL=TRACE jsi
+
+# disable all logs
+LOGURU_AUTOINIT=false jsi
+```
+
+### Redirect log output
+
+```sh
+jsi 2&> logs.txt
 ```
 
 ## Acknowledgements
