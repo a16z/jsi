@@ -14,6 +14,9 @@ from subprocess import Popen, TimeoutExpired
 from typing import Any
 
 from loguru import logger
+from rich.console import Console
+
+console = Console()
 
 sat, unsat, error, unknown, timeout, killed = (
     "sat",
@@ -24,14 +27,15 @@ sat, unsat, error, unknown, timeout, killed = (
     "killed",
 )
 
-# for yices, needs to include (get-model) in the SMT2 file to generate the model
+# maps descriptive solver names to their command line arguments
 SOLVERS = {
     "bitwuzla": "bitwuzla --produce-models".split(),
     "boolector": "boolector --model-gen --output-number-format=hex".split(),
     "cvc4": "cvc4 --produce-models".split(),
     "cvc5": "cvc5 --produce-models".split(),
     "stp": "stp --print-counterex --SMTLIB2".split(),
-    "yices-smt2": [],
+    # need to include (get-model) in the SMT2 file to generate the model with yices
+    "yices-smt2": "yices-smt2".split(),
     "z3": "z3 --model".split(),
 }
 
@@ -42,7 +46,17 @@ def try_closing(file: Any):
             file.close()
 
 
+def output_file(command: Command) -> str | None:
+    return (
+        f"{command.input_file}.{command.bin_name()}.out" if command.input_file else None
+    )
+
+
 def first_line(file: Any) -> str:
+    if isinstance(file, str):
+        with open(file) as f:
+            return f.readline()
+
     try:
         if hasattr(file, "seekable") and file.seekable():
             file.seek(0)
@@ -144,7 +158,7 @@ class Command:
     timer: threading.Timer | None = None
 
     def parts(self) -> list[str]:
-        parts = [self.executable, *self.args]
+        parts = [*self.args]
         if self.input_file:
             parts.append(str(self.input_file))
         return parts
@@ -166,7 +180,7 @@ class Command:
                 self.timer = timer
 
             else:
-                logger.debug(f"starting {self.bin_name()}")
+                logger.debug(f"starting {self.parts()}")
                 self.start_time = time.time()
                 self._process = Popen(
                     self.parts(), **self.kwargs, stdout=self.stdout, stderr=self.stderr
@@ -248,12 +262,14 @@ class Command:
             return timeout if self.has_timed_out else killed
 
         # FIXME: currently assumes that stdout is a file
-        stdout = self._process.stdout
+        outfile = output_file(self) or self.stdout
+        logger.debug(f"outfile: {outfile}")
 
-        if not stdout:
+        if not outfile:
             raise RuntimeError("no stdout")
 
-        line = first_line(stdout)
+        line = first_line(outfile)
+        logger.debug(f"result for {self.bin_name()}: {line}")
         if line == "sat\n":
             return sat
         elif line == "unsat\n":
@@ -373,14 +389,10 @@ class Task:
 
     @property
     def result(self) -> TaskResult:
-        return self._result or TaskResult.UNKNOWN
-
-    @result.setter
-    def result(self, result: TaskResult):
-        with self._lock:
-            if self._result is not None:
-                logger.warning(f"result already set to {self._result}")
-            self._result = result
+        for command in self.processes:
+            if command.ok():
+                return command.result()
+        return TaskResult.UNKNOWN
 
 
 def set_process_group():
@@ -509,8 +521,6 @@ class ProcessController:
         return True
 
     def _kill_process(self, command: Command):
-        logger.debug(f"_kill_process for {command.bin_name()}")
-
         if command.on_kill_list:
             logger.debug(f"{command.bin_name()} already on kill list")
             return
@@ -558,11 +568,6 @@ class ProcessController:
             elapsed = command.elapsed()
             exitcode = command.returncode
             logger.info(f"{command.bin_name()} returned {exitcode} in {elapsed:.2f}s")
-
-            # set task result if it is not already set
-            if task.result is TaskResult.UNKNOWN:
-                logger.debug(f"setting result to {command.result()}")
-                task.result = command.result()
 
             if (
                 command.ok()

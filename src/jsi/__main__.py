@@ -7,6 +7,7 @@ Usage:
 import atexit
 import os
 import pathlib
+import shutil
 import signal
 import sys
 import threading
@@ -14,6 +15,7 @@ from typing import Any
 
 import click
 from loguru import logger
+from rich.console import Console
 
 from jsi.core import (
     SOLVERS,
@@ -23,10 +25,33 @@ from jsi.core import (
     Task,
     TaskResult,
     TaskStatus,
+    output_file,
 )
 from jsi.utils import Supervisor
 
 logger.disable("jsi")
+
+console = Console()
+
+
+def qprint(*args: Any) -> None:
+    """quiet print, only print if in interactive terminal"""
+    if console.is_terminal:
+        console.print(*args)
+
+
+def find_available_solvers() -> list[str]:
+    qprint("checking for solvers available on PATH:")
+    available: list[str] = []
+    for solver in SOLVERS:
+        if shutil.which(solver) is not None:
+            available.append(solver)
+            qprint(f"{solver:>12} [green]OK[/green]")
+        else:
+            qprint(f"{solver:>12} not found")
+
+    qprint()
+    return available
 
 
 @click.command()
@@ -42,14 +67,29 @@ def main(file: pathlib.Path, timeout: float, debug: bool) -> int:
     if debug:
         logger.enable("jsi")
 
+    solvers = find_available_solvers()
+    if not solvers:
+        console.print("[red]No solvers found on PATH[/red]")
+        return 1
+
     config = Config(timeout_seconds=timeout, debug=debug)
     task = Task(name=str(file))
 
     # TODO: stdout, stderr redirects
-    commands = [
-        Command(executable=cmd[0], args=cmd[1:], input_file=file)
-        for cmd in SOLVERS.values()
-    ]
+    commands: list[Command] = []
+    for solver in solvers:
+        command = Command(
+            executable=solver,
+            args=SOLVERS[solver],
+            input_file=file,
+        )
+
+        f = output_file(command)
+        if not f:
+            raise RuntimeError(f"failed to create output file for {command}")
+        command.stdout = open(f, "w")  # noqa: SIM115
+
+        commands.append(command)
 
     controller = ProcessController(task, commands, config)
     event = threading.Event()

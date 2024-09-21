@@ -30,7 +30,7 @@ def cmd(
     stderr: str = "",
     start_delay_ms: int = 0,
 ):
-    args = ["tests/mockprocess.py"]
+    args = ["python", "tests/mockprocess.py"]
     if sleep_ms:
         args.append("--sleep-ms")
         args.append(str(sleep_ms))
@@ -45,7 +45,7 @@ def cmd(
         args.append(stderr)
 
     return Command(
-        "python",
+        "python-sleep{sleep_ms}-exit{exit_code}-stdout{stdout}-stderr{stderr}-start{start_delay_ms}",
         args=args,
         stdout=PIPE,
         stderr=PIPE,
@@ -345,6 +345,7 @@ def test_controller_timeout_single_command():
     assert not psutil.pid_exists(command.pid)
     assert command.has_timed_out
     assert command.returncode == -SIGTERM
+    assert (elapsed := command.elapsed()) and elapsed < 0.1
 
     assert task.status is TaskStatus.TERMINATED
     assert task.result == TaskResult.TIMEOUT
