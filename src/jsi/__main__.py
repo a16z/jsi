@@ -57,10 +57,13 @@ def find_available_solvers() -> list[str]:
 @click.version_option()
 @click.option("--timeout", type=float, help="Timeout in seconds.", show_default=True)
 @click.option("--debug", type=bool, help="Enable debug logging.", is_flag=True)
-@click.argument(
-    "file",
-    type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    required=True,
+@click.option(
+    "--full-run",
+    type=bool,
+    help="Run all solvers to completion (by default, the first solver to finish will terminate the others).",
+    is_flag=True,
+    default=False,
+    show_default=True,
 )
 @click.option(
     "--output",
@@ -68,7 +71,12 @@ def find_available_solvers() -> list[str]:
     required=False,
     help="Directory where solver output files will be written.",
 )
-def main(file: Path, timeout: float, debug: bool, output_dir: Path | None) -> int:
+@click.argument(
+    "file",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    required=True,
+)
+def main(file: Path, timeout: float, debug: bool, output: Path | None, full_run: bool) -> int:
     if debug:
         logger.enable("jsi")
 
@@ -77,11 +85,11 @@ def main(file: Path, timeout: float, debug: bool, output_dir: Path | None) -> in
         console.print("[red]No solvers found on PATH[/red]")
         return 1
 
-    config = Config(timeout_seconds=timeout, debug=debug)
+    config = Config(timeout_seconds=timeout, debug=debug, early_exit=not full_run)
     task = Task(name=str(file))
 
-    if not output_dir:
-        output_dir = file.parent
+    if not output:
+        output = file.parent
 
     # TODO: stdout, stderr redirects
     commands: list[Command] = []
@@ -92,7 +100,7 @@ def main(file: Path, timeout: float, debug: bool, output_dir: Path | None) -> in
             input_file=file,
         )
 
-        stdout_file = str(output_dir / f"{file.stem}.{solver}.out")
+        stdout_file = str(output / f"{file.stem}.{solver}.out")
 
         # TODO: handle output file creation failure
         if not stdout_file:
