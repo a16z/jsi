@@ -6,11 +6,11 @@ Usage:
 
 import atexit
 import os
-import pathlib
 import shutil
 import signal
 import sys
 import threading
+from pathlib import Path
 from typing import Any
 
 import click
@@ -25,7 +25,6 @@ from jsi.core import (
     Task,
     TaskResult,
     TaskStatus,
-    output_file,
 )
 from jsi.utils import Supervisor
 
@@ -56,14 +55,20 @@ def find_available_solvers() -> list[str]:
 
 @click.command()
 @click.version_option()
-@click.option("--timeout", type=float, help="timeout in seconds", default=0)
-@click.option("--debug", type=bool, help="enable debug logging", is_flag=True)
+@click.option("--timeout", type=float, help="Timeout in seconds.", show_default=True)
+@click.option("--debug", type=bool, help="Enable debug logging.", is_flag=True)
 @click.argument(
     "file",
-    type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
     required=True,
 )
-def main(file: pathlib.Path, timeout: float, debug: bool) -> int:
+@click.option(
+    "--output",
+    type=click.Path(exists=True, dir_okay=True, file_okay=False, path_type=Path),
+    required=False,
+    help="Directory where solver output files will be written.",
+)
+def main(file: Path, timeout: float, debug: bool, output_dir: Path | None) -> int:
     if debug:
         logger.enable("jsi")
 
@@ -75,20 +80,25 @@ def main(file: pathlib.Path, timeout: float, debug: bool) -> int:
     config = Config(timeout_seconds=timeout, debug=debug)
     task = Task(name=str(file))
 
+    if not output_dir:
+        output_dir = file.parent
+
     # TODO: stdout, stderr redirects
     commands: list[Command] = []
     for solver in solvers:
         command = Command(
-            executable=solver,
+            id=solver,
             args=SOLVERS[solver],
             input_file=file,
         )
 
-        f = output_file(command)
-        if not f:
-            raise RuntimeError(f"failed to create output file for {command}")
-        command.stdout = open(f, "w")  # noqa: SIM115
+        stdout_file = str(output_dir / f"{file.stem}.{solver}.out")
 
+        # TODO: handle output file creation failure
+        if not stdout_file:
+            raise RuntimeError(f"failed to create output file for {command}")
+
+        command.stdout = open(stdout_file, "w")  # noqa: SIM115
         commands.append(command)
 
     controller = ProcessController(task, commands, config)

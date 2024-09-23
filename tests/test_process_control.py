@@ -45,7 +45,7 @@ def cmd(
         args.append(stderr)
 
     return Command(
-        "python-sleep{sleep_ms}-exit{exit_code}-stdout{stdout}-stderr{stderr}-start{start_delay_ms}",
+        f"python-sleep{sleep_ms}-exit{exit_code}-stdout{stdout}-stderr{stderr}-start{start_delay_ms}",
         args=args,
         stdout=PIPE,
         stderr=PIPE,
@@ -54,7 +54,7 @@ def cmd(
 
 
 def test_real_process():
-    command = Command("echo", args=["hello", "world"], stdout=PIPE)
+    command = Command("echo", args=["echo", "hello", "world"], stdout=PIPE)
     command.start()
     stdout, stderr = command.communicate(timeout=0.01)
 

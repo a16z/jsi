@@ -4,13 +4,13 @@ from __future__ import annotations
 import contextlib
 import io
 import os
-import pathlib
 import threading
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
-from subprocess import Popen, TimeoutExpired
+from pathlib import Path
+from subprocess import PIPE, Popen, TimeoutExpired
 from typing import Any
 
 from loguru import logger
@@ -46,29 +46,16 @@ def try_closing(file: Any):
             file.close()
 
 
-def output_file(command: Command) -> str | None:
-    return (
-        f"{command.input_file}.{command.bin_name()}.out" if command.input_file else None
-    )
+def try_reading(file: Any) -> str | None:
+    if isinstance(file, io.TextIOWrapper):
+        with open(file.name) as f:
+            return f.read()
+
+    return None
 
 
-def first_line(file: Any) -> str:
-    if isinstance(file, str):
-        with open(file) as f:
-            return f.readline()
-
-    try:
-        if hasattr(file, "seekable") and file.seekable():
-            file.seek(0)
-        first_line = file.readline()
-    except io.UnsupportedOperation:
-        # If seeking fails, try reading without seeking
-        first_line = file.readline()
-
-    if isinstance(first_line, bytes):
-        first_line = first_line.decode("utf-8")
-
-    return first_line
+def first_line(content: str) -> str:
+    return content[: content.find("\n")]
 
 
 class TaskResult(Enum):
@@ -78,6 +65,7 @@ class TaskResult(Enum):
     UNKNOWN = unknown
     TIMEOUT = timeout
     KILLED = killed
+    NOT_STARTED = "not started"
 
 
 class TaskStatus(Enum):
@@ -122,6 +110,7 @@ class Config:
     early_exit: bool = True
     timeout_seconds: float = 0
     debug: bool = False
+    output_dir: Path | None = None
 
 
 @dataclass
@@ -133,11 +122,16 @@ class Command:
 
     Proxies data access to the underlying Popen instance (once started)."""
 
-    executable: str
+    # human readable identifier for the command (not necessarily the binary name)
+    id: str
+
+    # command line arguments
     args: Sequence[str] = field(default_factory=list)
-    input_file: pathlib.Path | None = None
+    input_file: Path | None = None
     stdout: io.TextIOWrapper | int | None = None
     stderr: io.TextIOWrapper | int | None = None
+    stdout_text: str | None = None
+    stderr_text: str | None = None
 
     # extra arguments to pass to Popen
     kwargs: dict[str, Any] = field(default_factory=dict)
@@ -151,7 +145,7 @@ class Command:
     # internal fields
     _process: Popen[str] | None = None
     _lock: threading.Lock = threading.Lock()
-    _result: str | None = None
+    _result: TaskResult | None = None
 
     # to facilitate testing
     start_delay_ms: int = 0
@@ -183,7 +177,11 @@ class Command:
                 logger.debug(f"starting {self.parts()}")
                 self.start_time = time.time()
                 self._process = Popen(
-                    self.parts(), **self.kwargs, stdout=self.stdout, stderr=self.stderr
+                    self.parts(),
+                    **self.kwargs,
+                    stdout=self.stdout,
+                    stderr=self.stderr,
+                    text=True,
                 )  # type: ignore
 
     def wait(self, timeout: float | None = None):
@@ -215,7 +213,7 @@ class Command:
         return thread
 
     def bin_name(self):
-        return self.executable
+        return self.id
 
     def done(self):
         return self._process is not None and self._process.poll() is not None
@@ -238,8 +236,6 @@ class Command:
             raise RuntimeError(f"Process not started: {self.bin_name()}")
 
     def _ensure_finished(self):
-        self._ensure_started()
-
         if not self.done():
             raise RuntimeError(f"Process still running: {self._process!r}")
 
@@ -254,25 +250,27 @@ class Command:
 
         return self.result() in (TaskResult.SAT, TaskResult.UNSAT)
 
-    def _get_result(self):
-        if self._process is None:
+    def _get_result(self) -> str:
+        # only valid if the process has finished
+        if not self._process:
             raise RuntimeError("Process not started")
+
+        if self.has_timed_out:
+            return timeout
 
         if self._process.returncode == -15:
             return timeout if self.has_timed_out else killed
 
-        # FIXME: currently assumes that stdout is a file
-        outfile = output_file(self) or self.stdout
-        logger.debug(f"outfile: {outfile}")
+        stdout_content, _ = self.read_io()
+        if not stdout_content:
+            logger.warning(f"no output from {self.bin_name()}")
+            return unknown
 
-        if not outfile:
-            raise RuntimeError("no stdout")
-
-        line = first_line(outfile)
+        line = first_line(stdout_content).strip()
         logger.debug(f"result for {self.bin_name()}: {line}")
-        if line == "sat\n":
+        if line == "sat":
             return sat
-        elif line == "unsat\n":
+        elif line == "unsat":
             return unsat
         elif "error" in line:
             return error
@@ -286,10 +284,42 @@ class Command:
             return unknown
 
     def result(self) -> TaskResult:
+        if not self.started():
+            return TaskResult.NOT_STARTED
+
         self._ensure_finished()
-        if self._result is None:
-            self._result = self._get_result()
-        return TaskResult(self._result)
+
+        # cache the result
+        if not self._result:
+            result_str = self._get_result()
+            self._result = TaskResult(result_str)
+
+        return self._result
+
+    def _read_io(self) -> tuple[str | None, str | None]:
+        stdout_content, stderr_content = None, None
+
+        if self.stdout == PIPE or self.stderr == PIPE:
+            stdout_content, stderr_content = self.communicate()
+
+        if stdout_content is None:
+            stdout_content = try_reading(self.stdout)
+
+        if stderr_content is None:
+            stderr_content = try_reading(self.stderr)
+
+        return stdout_content, stderr_content
+
+    def read_io(self) -> tuple[str | None, str | None]:
+        self._ensure_finished()
+
+        # return cached values if available
+        if self.stdout_text or self.stderr_text:
+            return self.stdout_text, self.stderr_text
+
+        stdout, stderr = self._read_io()
+        self.stdout_text, self.stderr_text = stdout, stderr
+        return stdout, stderr
 
     #
     # pass through methods for Popen
@@ -389,9 +419,28 @@ class Task:
 
     @property
     def result(self) -> TaskResult:
+        has_timeouts = False
+        has_errors = False
+
         for command in self.processes:
+            if not command.started() or not command.done():
+                continue
+
             if command.ok():
                 return command.result()
+
+            if command.has_timed_out:
+                has_timeouts = True
+
+            if command.result() == TaskResult.ERROR:
+                has_errors = True
+
+        if has_timeouts:
+            return TaskResult.TIMEOUT
+
+        if has_errors:
+            return TaskResult.ERROR
+
         return TaskResult.UNKNOWN
 
 
