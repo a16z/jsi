@@ -16,6 +16,8 @@ from typing import Any
 import click
 from loguru import logger
 from rich.console import Console
+from rich.table import Table
+from rich.text import Text
 
 from jsi.core import (
     SOLVERS,
@@ -31,26 +33,65 @@ from jsi.utils import Supervisor
 logger.disable("jsi")
 
 console = Console()
+error_console = Console(stderr=True)
 
 
-def qprint(*args: Any) -> None:
+def qprint(*args: Any, dest: Console = console) -> None:
     """quiet print, only print if in interactive terminal"""
-    if console.is_terminal:
-        console.print(*args)
+    if dest.is_terminal:
+        dest.print(*args)
 
 
 def find_available_solvers() -> list[str]:
-    qprint("checking for solvers available on PATH:")
+    qprint("checking for solvers available on PATH:", dest=error_console)
     available: list[str] = []
     for solver in SOLVERS:
         if shutil.which(solver) is not None:
             available.append(solver)
-            qprint(f"{solver:>12} [green]OK[/green]")
+            qprint(f"{solver:>12} [green]OK[/green]", dest=error_console)
         else:
-            qprint(f"{solver:>12} not found")
+            qprint(f"{solver:>12} not found", dest=error_console)
 
-    qprint()
+    qprint("", dest=error_console)
     return available
+
+def result_color(result: TaskResult) -> str:
+    if result in (TaskResult.SAT, TaskResult.UNSAT):
+        return "green"
+
+    if result in (TaskResult.ERROR, ):
+        return "red"
+
+    if result in (TaskResult.TIMEOUT, TaskResult.KILLED):
+        return "yellow"
+
+    return "white"
+
+
+def stylize(result: TaskResult) -> Text:
+    return Text(result.value, style=result_color(result))
+
+
+def print_results(controller: ProcessController) -> None:
+    table = Table()
+
+    table.add_column("solver", style="cyan")
+    table.add_column("result")
+    table.add_column("exitcode", style="magenta", justify="right")
+    table.add_column("time", justify="right", style="yellow")
+
+    for command in sorted(
+        controller.commands, key=lambda x: (not x.ok(), x.elapsed() or 0)
+    ):
+        table.add_row(
+            command.id,
+            stylize(command.result()),
+            str(command.returncode) if command.returncode is not None else "N/A",
+            f"{command.elapsed():.2f}s" if command.elapsed() else "N/A",
+        )
+
+    console = Console()
+    console.print(table)
 
 
 @click.command()
@@ -60,7 +101,10 @@ def find_available_solvers() -> list[str]:
 @click.option(
     "--full-run",
     type=bool,
-    help="Run all solvers to completion (by default, the first solver to finish will terminate the others).",
+    help=(
+        "Run all solvers to completion (by default, the first solver to finish will"
+        " cause the others to be terminated)."
+    ),
     is_flag=True,
     default=False,
     show_default=True,
@@ -76,7 +120,9 @@ def find_available_solvers() -> list[str]:
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     required=True,
 )
-def main(file: Path, timeout: float, debug: bool, output: Path | None, full_run: bool) -> int:
+def main(
+    file: Path, timeout: float, debug: bool, output: Path | None, full_run: bool
+) -> int:
     if debug:
         logger.enable("jsi")
 
@@ -160,6 +206,9 @@ def main(file: Path, timeout: float, debug: bool, output: Path | None, full_run:
         controller.join()
 
         click.echo(task.result.value)
+
+        print_results(controller)
+
         return 0 if task.result in (TaskResult.SAT, TaskResult.UNSAT) else 1
     except KeyboardInterrupt:
         controller.kill()
