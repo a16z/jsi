@@ -12,6 +12,8 @@
 -e file:.
 click==8.1.7
     # via jsi
+humanize==4.10.0
+    # via jsi
 loguru==0.7.2
     # via jsi
 markdown-it-py==3.0.0

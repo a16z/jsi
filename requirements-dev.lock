@@ -12,6 +12,8 @@
 -e file:.
 click==8.1.7
     # via jsi
+humanize==4.10.0
+    # via jsi
 iniconfig==2.0.0
     # via pytest
 loguru==0.7.2

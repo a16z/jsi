@@ -5,17 +5,21 @@ Usage:
 """
 
 import atexit
+import io
 import os
 import shutil
 import signal
 import sys
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
 import click
+import humanize
 from loguru import logger
 from rich.console import Console
+from rich.status import Status
 from rich.table import Table
 from rich.text import Text
 
@@ -42,6 +46,10 @@ def qprint(*args: Any, dest: Console = console) -> None:
         dest.print(*args)
 
 
+def file_loc(stdout: io.TextIOWrapper | int | None) -> str:
+    return stdout.name if isinstance(stdout, io.TextIOWrapper) else ""
+
+
 def find_available_solvers() -> list[str]:
     qprint("checking for solvers available on PATH:", dest=error_console)
     available: list[str] = []
@@ -55,11 +63,12 @@ def find_available_solvers() -> list[str]:
     qprint("", dest=error_console)
     return available
 
+
 def result_color(result: TaskResult) -> str:
     if result in (TaskResult.SAT, TaskResult.UNSAT):
         return "green"
 
-    if result in (TaskResult.ERROR, ):
+    if result in (TaskResult.ERROR,):
         return "red"
 
     if result in (TaskResult.TIMEOUT, TaskResult.KILLED):
@@ -68,30 +77,47 @@ def result_color(result: TaskResult) -> str:
     return "white"
 
 
-def stylize(result: TaskResult) -> Text:
+def styled_result(result: TaskResult) -> Text:
     return Text(result.value, style=result_color(result))
 
 
-def print_results(controller: ProcessController) -> None:
-    table = Table()
+def styled_size(size: int) -> Text:
+    return Text(humanize.naturalsize(size, gnu=True))
 
+
+def styled_output(command: Command) -> Text:
+    return Text(file_loc(command.stdout), style="magenta")
+
+
+def get_results_table(controller: ProcessController) -> Table:
+    table = Table(title="Results")
     table.add_column("solver", style="cyan")
     table.add_column("result")
     table.add_column("exitcode", style="magenta", justify="right")
     table.add_column("time", justify="right", style="yellow")
+    table.add_column("output file", justify="left", style="magenta", overflow="fold")
+    table.add_column("size", justify="right")
 
-    for command in sorted(
-        controller.commands, key=lambda x: (not x.ok(), x.elapsed() or 0)
-    ):
+    commands = controller.commands
+    for command in sorted(commands, key=lambda x: (not x.ok(), x.elapsed() or 0)):
         table.add_row(
             command.id,
-            stylize(command.result()),
+            styled_result(command.result()),
             str(command.returncode) if command.returncode is not None else "N/A",
             f"{command.elapsed():.2f}s" if command.elapsed() else "N/A",
+            styled_output(command) if command.stdout else "N/A",
+            styled_size(len(command.stdout_text) if command.stdout_text else 0),
         )
 
-    console = Console()
-    console.print(table)
+    return table
+
+
+def update_status(status: Status):
+    i = 1
+    while True:
+        status.update("." * i)
+        i += 1
+        time.sleep(1)
 
 
 @click.command()
@@ -188,6 +214,9 @@ def main(
     atexit.register(cleanup)
 
     try:
+        error_console.print(f"Starting {len(commands)} solvers")
+        error_console.print(f"Output will be written to: {output}")
+
         # start the solver processes
         controller.start()
 
@@ -203,11 +232,20 @@ def main(
         supervisor.start()
 
         # wait for the solver processes to finish
-        controller.join()
+        status_msg = "waiting for solvers (ctrl+c to interrupt)"
+        with console.status(status_msg, spinner="noise") as status:
+            threading.Thread(target=update_status, args=(status,), daemon=True).start()
+            controller.join()
 
-        click.echo(task.result.value)
+        for command in sorted(controller.commands, key=lambda x: x.elapsed() or 0):
+            if command.done() and command.ok():
+                if stdout := command.stdout_text:
+                    console.print(stdout.strip())
+                    console.print(f"; {command.id} output\n")
+                break
 
-        print_results(controller)
+        table = get_results_table(controller)
+        error_console.print(table)
 
         return 0 if task.result in (TaskResult.SAT, TaskResult.UNSAT) else 1
     except KeyboardInterrupt:

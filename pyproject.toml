@@ -11,6 +11,7 @@ dependencies = [
     "pyright>=1.1.378",
     "psutil>=6.0.0",
     "rich>=13.8.1",
+    "humanize>=4.10.0",
 ]
 readme = "README.md"
 requires-python = ">= 3.11"
