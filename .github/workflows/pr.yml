@@ -40,7 +40,7 @@ jobs:
     # if: needs.changes.outputs.python == 'true'
     steps:
     - uses: actions/checkout@v4
-    - uses: eifinger/setup-rye@v3
+    - uses: eifinger/setup-rye@v4  # replaces setup-python
       id: setup-rye
       with:
         version: '0.39.0'
