@@ -463,7 +463,7 @@ class ProcessController:
     commands: list[Command]
     config: Config
     exit_callback: Callable[[Command, Task], None] | None = None
-    monitors: list[threading.Thread] = field(default_factory=list)
+    _monitors: list[threading.Thread] = field(default_factory=list)
 
     def start(self):
         """Start the task by spawning subprocesses for each command.
@@ -491,7 +491,7 @@ class ProcessController:
 
             # spawn a thread that will monitor this process
             monitor = threading.Thread(target=self._monitor_process, args=(command,))
-            self.monitors.append(monitor)
+            self._monitors.append(monitor)
             monitor.start()
 
         # it's possible that some processes finished already and the status has switched
@@ -525,7 +525,7 @@ class ProcessController:
         # TODO: add a timeout to avoid hanging forever
         # TODO: what if the monitors have not be started yet?
         # TODO: enforce specific task status?
-        for monitor in self.monitors:
+        for monitor in self._monitors:
             monitor.join()
 
     def kill(self) -> bool:

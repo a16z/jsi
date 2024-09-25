@@ -11,7 +11,7 @@ import shutil
 import signal
 import sys
 import threading
-import time
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -112,14 +112,7 @@ def get_results_table(controller: ProcessController) -> Table:
     return table
 
 
-def update_status(status: Status, controller: ProcessController):
-    while True:
-        time.sleep(0.1)
-        not_done = sum(1 for c in controller.commands if not c.done())
-        status.update(f"waiting for {not_done} solvers (press ^C to stop)")
-
-
-def on_process_exit(command: Command, task: Task):
+def on_process_exit(command: Command, task: Task, status: Status):
     if task.status > TaskStatus.RUNNING:
         return
 
@@ -136,6 +129,42 @@ def on_process_exit(command: Command, task: Task):
         styled_result(command.result()),
     )
     error_console.print(message)
+
+    not_done = sum(1 for command in task.processes if not command.done())
+    status.update(f"{not_done} solvers still running (Ctrl-C to stop)")
+
+
+def setup_signal_handlers(controller: ProcessController):
+    event = threading.Event()
+
+    def signal_listener(signum: int, frame: Any | None = None):
+        event.set()
+        thread_name = threading.current_thread().name
+        logger.debug(f"Signal {signum} received in thread: {thread_name}")
+
+    def signal_handler():
+        event.wait()
+        cleanup()
+
+    def cleanup():
+        controller.kill()
+
+    # register the signal listener
+    for signum in [
+        signal.SIGINT,
+        signal.SIGTERM,
+        signal.SIGQUIT,
+        signal.SIGHUP,
+    ]:
+        signal.signal(signum, signal_listener)
+
+    # start a signal handling thread in daemon mode so that it does not block
+    # the program from exiting
+    signal_handler_thread = threading.Thread(target=signal_handler, daemon=True)
+    signal_handler_thread.start()
+
+    # also register the cleanup function to be called on exit
+    atexit.register(cleanup)
 
 
 @click.command()
@@ -172,16 +201,14 @@ def main(
 
     solvers = find_available_solvers()
     if not solvers:
-        console.print("[red]No solvers found on PATH[/red]")
+        error_console.print("No solvers found on PATH", style="red")
         return 1
 
-    config = Config(timeout_seconds=timeout, debug=debug, early_exit=not full_run)
-    task = Task(name=str(file))
-
+    # output directory defaults to the parent of the input file
     if not output:
         output = file.parent
 
-    # TODO: stdout, stderr redirects
+    # build the commands to run the solvers
     commands: list[Command] = []
     for solver in solvers:
         command = Command(
@@ -199,45 +226,20 @@ def main(
         command.stdout = open(stdout_file, "w")  # noqa: SIM115
         commands.append(command)
 
-    controller = ProcessController(
-        task, commands, config, exit_callback=on_process_exit
-    )
-    event = threading.Event()
+    # initialize the controller
+    task = Task(name=str(file))
+    config = Config(timeout_seconds=timeout, debug=debug, early_exit=not full_run)
+    status_message = "waiting for solvers (press ^C to stop)"
+    status = Status(status_message, spinner="noise", console=error_console)
+    exit_callback = partial(on_process_exit, status=status)
+    controller = ProcessController(task, commands, config, exit_callback)
 
-    def signal_listener(signum: int, frame: Any | None = None):
-        event.set()
-        thread_name = threading.current_thread().name
-        logger.debug(f"Signal {signum} received in thread: {thread_name}")
+    setup_signal_handlers(controller)
 
-    def signal_handler():
-        event.wait()
-        cleanup()
-
-    def cleanup():
-        controller.kill()
-
-    # register the signal listener
-    for signum in [
-        signal.SIGINT,
-        signal.SIGTERM,
-        signal.SIGQUIT,
-        signal.SIGHUP,
-    ]:
-        signal.signal(signum, signal_listener)
-
-    # start a signal handling thread in daemon mode so that it does not block
-    # the program from exiting
-    signal_handler_thread = threading.Thread(target=signal_handler, daemon=True)
-    signal_handler_thread.start()
-
-    # also register the cleanup function to be called on exit
-    atexit.register(cleanup)
-
+    error_console.print(f"Starting {len(commands)} solvers")
+    error_console.print(f"Output will be written to: {output}")
     try:
-        error_console.print(f"Starting {len(commands)} solvers")
-        error_console.print(f"Output will be written to: {output}")
-
-        # start the solver processes
+        # all systems go
         controller.start()
 
         # wait for the solver processes to start, we need the PIDs for the supervisor
@@ -251,13 +253,8 @@ def main(
         supervisor.daemon = True
         supervisor.start()
 
-        # wait for the solver processes to finish
-        msg = "waiting for solvers (press ^C to stop)"
-        with error_console.status(msg, spinner="noise") as status:
-            threading.Thread(
-                target=update_status, args=(status, controller), daemon=True
-            ).start()
-            controller.join()
+        # wait for the solvers to finish
+        controller.join()
 
         return 0 if task.result in (TaskResult.SAT, TaskResult.UNSAT) else 1
     except KeyboardInterrupt:
@@ -268,7 +265,7 @@ def main(
             if command.done() and command.ok():
                 if stdout := command.stdout_text:
                     console.print(stdout.strip())
-                    console.print(f"; {command.id} output")
+                    console.print(f"; (showing result for {command.id})")
                 break
 
         table = get_results_table(controller)
