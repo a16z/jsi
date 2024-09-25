@@ -43,7 +43,7 @@ jobs:
     - uses: eifinger/setup-rye@v3
       id: setup-rye
       with:
-        version: '0.34.0'
+        version: '0.39.0'
     - run: rye pin ${{ matrix.py }}
     - name: Sync
       run: |
