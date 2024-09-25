@@ -93,7 +93,7 @@ def get_results_table(controller: ProcessController) -> Table:
     table = Table(title="Results")
     table.add_column("solver", style="cyan")
     table.add_column("result")
-    table.add_column("exitcode", style="magenta", justify="right")
+    table.add_column("exit", style="magenta", justify="right")
     table.add_column("time", justify="right", style="yellow")
     table.add_column("output file", justify="left", style="magenta", overflow="fold")
     table.add_column("size", justify="right")
@@ -112,12 +112,30 @@ def get_results_table(controller: ProcessController) -> Table:
     return table
 
 
-def update_status(status: Status):
-    i = 1
+def update_status(status: Status, controller: ProcessController):
     while True:
-        status.update("." * i)
-        i += 1
-        time.sleep(1)
+        time.sleep(0.1)
+        not_done = sum(1 for c in controller.commands if not c.done())
+        status.update(f"waiting for {not_done} solvers (press ^C to stop)")
+
+
+def on_process_exit(command: Command, task: Task):
+    if task.status > TaskStatus.RUNNING:
+        return
+
+    # would be unexpected
+    if not command.done():
+        return
+
+    if command.result() == TaskResult.TIMEOUT:
+        return
+
+    message = Text.assemble(
+        (command.id, "cyan bold"),
+        " returned ",
+        styled_result(command.result()),
+    )
+    error_console.print(message)
 
 
 @click.command()
@@ -181,7 +199,9 @@ def main(
         command.stdout = open(stdout_file, "w")  # noqa: SIM115
         commands.append(command)
 
-    controller = ProcessController(task, commands, config)
+    controller = ProcessController(
+        task, commands, config, exit_callback=on_process_exit
+    )
     event = threading.Event()
 
     def signal_listener(signum: int, frame: Any | None = None):
@@ -232,25 +252,27 @@ def main(
         supervisor.start()
 
         # wait for the solver processes to finish
-        status_msg = "waiting for solvers (ctrl+c to interrupt)"
-        with console.status(status_msg, spinner="noise") as status:
-            threading.Thread(target=update_status, args=(status,), daemon=True).start()
+        msg = "waiting for solvers (press ^C to stop)"
+        with error_console.status(msg, spinner="noise") as status:
+            threading.Thread(
+                target=update_status, args=(status, controller), daemon=True
+            ).start()
             controller.join()
-
-        for command in sorted(controller.commands, key=lambda x: x.elapsed() or 0):
-            if command.done() and command.ok():
-                if stdout := command.stdout_text:
-                    console.print(stdout.strip())
-                    console.print(f"; {command.id} output\n")
-                break
-
-        table = get_results_table(controller)
-        error_console.print(table)
 
         return 0 if task.result in (TaskResult.SAT, TaskResult.UNSAT) else 1
     except KeyboardInterrupt:
         controller.kill()
         return 1
+    finally:
+        for command in sorted(controller.commands, key=lambda x: x.elapsed() or 0):
+            if command.done() and command.ok():
+                if stdout := command.stdout_text:
+                    console.print(stdout.strip())
+                    console.print(f"; {command.id} output")
+                break
+
+        table = get_results_table(controller)
+        error_console.print(table)
 
 
 if __name__ == "__main__":

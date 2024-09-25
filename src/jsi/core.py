@@ -14,9 +14,6 @@ from subprocess import PIPE, Popen, TimeoutExpired
 from typing import Any
 
 from loguru import logger
-from rich.console import Console
-
-console = Console()
 
 sat, unsat, error, unknown, timeout, killed = (
     "sat",
@@ -459,11 +456,13 @@ class ProcessController:
     - task: the task to be solved
     - commands: the commands to use to solve the task
     - config: the configuration for the controller
+    - exit_callback: a callback that is called when one of the processes finishes
     """
 
     task: Task
     commands: list[Command]
     config: Config
+    exit_callback: Callable[[Command, Task], None] | None = None
     monitors: list[threading.Thread] = field(default_factory=list)
 
     def start(self):
@@ -612,6 +611,9 @@ class ProcessController:
         try_closing(command.stderr)
 
         task = self.task
+
+        if self.exit_callback:
+            self.exit_callback(command, task)
 
         if command.started():
             elapsed = command.elapsed()
