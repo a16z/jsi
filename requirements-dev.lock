@@ -7,11 +7,15 @@
 #   all-features: false
 #   with-sources: false
 #   generate-hashes: false
-#   universal: false
+#   universal: true
 
 -e file:.
 click==8.1.7
     # via jsi
+colorama==0.4.6 ; sys_platform == 'win32' or platform_system == 'Windows'
+    # via click
+    # via loguru
+    # via pytest
 humanize==4.10.0
     # via jsi
 iniconfig==2.0.0
@@ -37,3 +41,5 @@ pyright==1.1.378
 pytest==8.3.2
 rich==13.8.1
     # via jsi
+win32-setctime==1.1.0 ; sys_platform == 'win32'
+    # via loguru
