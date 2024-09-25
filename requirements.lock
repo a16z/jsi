@@ -7,14 +7,11 @@
 #   all-features: false
 #   with-sources: false
 #   generate-hashes: false
-#   universal: true
+#   universal: false
 
 -e file:.
 click==8.1.7
     # via jsi
-colorama==0.4.6 ; sys_platform == 'win32' or platform_system == 'Windows'
-    # via click
-    # via loguru
 humanize==4.10.0
     # via jsi
 loguru==0.7.2
@@ -29,9 +26,9 @@ psutil==6.0.0
     # via jsi
 pygments==2.18.0
     # via rich
-pyright==1.1.378
+pyright==1.1.382.post0
     # via jsi
 rich==13.8.1
     # via jsi
-win32-setctime==1.1.0 ; sys_platform == 'win32'
-    # via loguru
+typing-extensions==4.12.2
+    # via pyright
