@@ -46,13 +46,14 @@ jobs:
         version: '0.39.0'
     - run: rye pin ${{ matrix.py }}
     - name: Sync
+      shell: pwsh
       run: |
         rye sync
-        if [[ $(git diff --stat requirements.lock) != '' ]]; then
-            echo 'Rye lockfile not up-to-date'
+        if (git diff --stat requirements.lock) {
+            Write-Output 'Rye lockfile not up-to-date'
             git diff requirements.lock
             exit 1
-        fi
+        }
     - run: rye fmt --check
     - run: rye lint
     - run: rye run check
