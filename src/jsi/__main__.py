@@ -101,7 +101,7 @@ def get_results_table(controller: ProcessController) -> Table:
     commands = controller.commands
     for command in sorted(commands, key=lambda x: (not x.ok(), x.elapsed() or 0)):
         table.add_row(
-            command.id,
+            command.name,
             styled_result(command.result()),
             str(command.returncode) if command.returncode is not None else "N/A",
             f"{command.elapsed():.2f}s" if command.elapsed() else "N/A",
@@ -124,7 +124,7 @@ def on_process_exit(command: Command, task: Task, status: Status):
         return
 
     message = Text.assemble(
-        (command.id, "cyan bold"),
+        (command.name, "cyan bold"),
         " returned ",
         styled_result(command.result()),
     )
@@ -212,7 +212,7 @@ def main(
     commands: list[Command] = []
     for solver in solvers:
         command = Command(
-            id=solver,
+            name=solver,
             args=SOLVERS[solver],
             input_file=file,
         )
@@ -241,6 +241,7 @@ def main(
     try:
         # all systems go
         controller.start()
+        status.start()
 
         # wait for the solver processes to start, we need the PIDs for the supervisor
         while controller.task.status.value < TaskStatus.RUNNING.value:
@@ -261,11 +262,12 @@ def main(
         controller.kill()
         return 1
     finally:
+        status.stop()
         for command in sorted(controller.commands, key=lambda x: x.elapsed() or 0):
             if command.done() and command.ok():
                 if stdout := command.stdout_text:
                     console.print(stdout.strip())
-                    console.print(f"; (showing result for {command.id})")
+                    console.print(f"; (showing result for {command.name})")
                 break
 
         table = get_results_table(controller)

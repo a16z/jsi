@@ -120,7 +120,7 @@ class Command:
     Proxies data access to the underlying Popen instance (once started)."""
 
     # human readable identifier for the command (not necessarily the binary name)
-    id: str
+    name: str
 
     # command line arguments
     args: Sequence[str] = field(default_factory=list)
@@ -210,7 +210,7 @@ class Command:
         return thread
 
     def bin_name(self):
-        return self.id
+        return self.name
 
     def done(self):
         return self._process is not None and self._process.poll() is not None

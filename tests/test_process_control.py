@@ -54,7 +54,7 @@ def cmd(
 
 
 def test_real_process():
-    command = Command("echo", args=["echo", "hello", "world"], stdout=PIPE)
+    command = Command("hello-world", args=["echo", "hello", "world"], stdout=PIPE)
     command.start()
     stdout, stderr = command.communicate(timeout=0.01)
 
