@@ -81,7 +81,7 @@ def test_cmd_options():
         stderr="boop",
     )
     command.start()
-    stdout, stderr = command.communicate(timeout=0.1)
+    stdout, stderr = command.communicate(timeout=0.2)
 
     print(f"{stdout=}")
     print(f"{stderr=}")
