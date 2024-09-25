@@ -12,20 +12,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  changes:
-    runs-on: ubuntu-latest
-    permissions:
-      pull-requests: read
-    outputs:
-      python: ${{ steps.filter.outputs.python }}
-    steps:
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            python:
-            - '**/*.py'
-            - 'pyproject.toml'
+  # changes:
+  #   runs-on: ubuntu-latest
+  #   permissions:
+  #     pull-requests: read
+  #   outputs:
+  #     python: ${{ steps.filter.outputs.python }}
+  #   steps:
+  #     - uses: dorny/paths-filter@v3
+  #       id: filter
+  #       with:
+  #         filters: |
+  #           python:
+  #           - '**/*.py'
+  #           - 'pyproject.toml'
 
   test-python:
     runs-on: ${{ matrix.os }}
@@ -36,8 +36,8 @@ jobs:
         py: ['3.11', '3.12']
         os: [ubuntu-latest, macos-latest, windows-latest]
 
-    needs: changes
-    if: needs.changes.outputs.python == 'true'
+    # needs: changes
+    # if: needs.changes.outputs.python == 'true'
     steps:
     - uses: actions/checkout@v4
     - uses: eifinger/setup-rye@v3
