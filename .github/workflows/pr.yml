@@ -1,0 +1,59 @@
+# based on https://github.com/carderne/postmodern-python/blob/main/.github/workflows/pr.yml
+
+name: pr
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+  workflow_dispatch:  # allow manual triggering of the workflow
+
+concurrency:
+  group: pr-${{ github.event.number }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      python: ${{ steps.filter.outputs.python }}
+    steps:
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            python:
+            - '**/*.py'
+            - 'pyproject.toml'
+
+  test-python:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        py: ['3.10', '3.11', '3.12']
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
+    steps:
+    - uses: actions/checkout@v4
+    - uses: eifinger/setup-rye@v3
+      id: setup-rye
+      with:
+        version: '0.34.0'
+    - run: rye pin ${{ matrix.py }}
+    - name: Sync
+      run: |
+        rye sync
+        if [[ $(git diff --stat requirements.lock) != '' ]]; then
+            echo 'Rye lockfile not up-to-date'
+            git diff requirements.lock
+            exit 1
+        fi
+    - run: rye fmt --check
+    - run: rye lint
+    - run: rye run check
+    - run: rye run test
