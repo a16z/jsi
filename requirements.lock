@@ -22,8 +22,6 @@ mdurl==0.1.2
     # via markdown-it-py
 nodeenv==1.9.1
     # via pyright
-psutil==6.0.0
-    # via jsi
 pygments==2.18.0
     # via rich
 pyright==1.1.382.post0

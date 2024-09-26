@@ -3,7 +3,6 @@ from signal import SIGKILL, SIGTERM
 from subprocess import PIPE, TimeoutExpired
 from unittest.mock import patch
 
-import psutil
 import pytest
 from loguru import logger
 
@@ -18,6 +17,7 @@ from jsi.core import (
     unknown,
     unsat,
 )
+from jsi.utils import pid_exists
 
 # enable debug logging
 logger.enable("jsi")
@@ -128,12 +128,12 @@ def test_command_kill():
 
     # when we start it, the pid should exist
     command.start()
-    assert psutil.pid_exists(command.pid)
+    assert pid_exists(command.pid)
 
     # when we kill it, the pid should no longer exist
     command.kill()
     command.wait()
-    assert not psutil.pid_exists(command.pid)
+    assert not pid_exists(command.pid)
 
 
 def test_delayed_start_mocked_time():
@@ -242,8 +242,8 @@ def test_controller_start_double_command_early_exit(
     assert (t2 := command2.elapsed()) and t2 < 1
 
     # there should be no process left running
-    assert not psutil.pid_exists(command1.pid)
-    assert not psutil.pid_exists(command2.pid)
+    assert not pid_exists(command1.pid)
+    assert not pid_exists(command2.pid)
 
 
 def test_controller_early_exit_with_slow_command():
@@ -328,7 +328,7 @@ def test_controller_no_early_exit(command1: Command, command2: Command, expected
         assert command.done()
         assert not command.has_timed_out
         assert command.returncode == 0
-        assert not psutil.pid_exists(command.pid)
+        assert not pid_exists(command.pid)
 
 
 # TODO: test with timeout (no successful result, successful result then kills, etc.)
@@ -343,7 +343,7 @@ def test_controller_timeout_single_command():
     controller.join()
 
     assert command.done()
-    assert not psutil.pid_exists(command.pid)
+    assert not pid_exists(command.pid)
     assert command.has_timed_out
     assert command.returncode == -SIGTERM
     assert (elapsed := command.elapsed()) and elapsed < 0.1

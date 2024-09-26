@@ -4,7 +4,6 @@ import os
 import signal
 import time
 
-import psutil
 from loguru import logger
 
 logger.disable("jsi.utils")
@@ -24,6 +23,14 @@ def kill_process(pid: int):
         logger.debug(f"sent SIGTERM to process {pid}")
     except ProcessLookupError:
         logger.debug(f"skipping SIGTERM for process {pid} -- not found")
+
+
+def pid_exists(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
 
 
 class Supervisor(multiprocessing.Process):
@@ -51,7 +58,7 @@ class Supervisor(multiprocessing.Process):
                     logger.debug(f"supervisor still running (PID: {self.pid})")
                     last_message_time = current_time
 
-                if psutil.pid_exists(self.parent_pid):
+                if pid_exists(self.parent_pid):
                     time.sleep(1)
                     continue
 
