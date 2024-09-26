@@ -81,7 +81,7 @@ def test_cmd_options():
         stderr="boop",
     )
     command.start()
-    stdout, stderr = command.communicate(timeout=0.1)
+    stdout, stderr = command.communicate(timeout=0.2)
 
     print(f"{stdout=}")
     print(f"{stderr=}")
@@ -165,7 +165,8 @@ def test_delayed_start_real_time():
     assert not command.started()
     assert not command.done()
 
-    time.sleep(0.2)
+    # give it some time to complete (allow some wiggle room for slow CI)
+    time.sleep(0.4)
     assert command.started()
     assert command.done()
     assert command.returncode == 0

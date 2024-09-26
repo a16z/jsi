@@ -26,7 +26,9 @@ psutil==6.0.0
     # via jsi
 pygments==2.18.0
     # via rich
-pyright==1.1.378
+pyright==1.1.382.post0
     # via jsi
 rich==13.8.1
     # via jsi
+typing-extensions==4.12.2
+    # via pyright

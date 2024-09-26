@@ -25,6 +25,11 @@ build-backend = "pdm.backend"
 
 [tool.rye]
 managed = true
+
+# switch to true to generate cross-platform lockfiles when we support Windows
+# which we don't
+universal = false
+
 dev-dependencies = [
     "pyright>=1.1.377",
     "pytest>=8.3.2",
