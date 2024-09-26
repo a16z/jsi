@@ -13,7 +13,7 @@ from pathlib import Path
 from subprocess import PIPE, Popen, TimeoutExpired
 from typing import Any
 
-from loguru import logger
+from jsi.utils import logger
 
 sat, unsat, error, unknown, timeout, killed = (
     "sat",

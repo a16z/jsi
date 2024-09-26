@@ -4,7 +4,6 @@ from subprocess import PIPE, TimeoutExpired
 from unittest.mock import patch
 
 import pytest
-from loguru import logger
 
 from jsi.core import (
     Command,
@@ -17,10 +16,10 @@ from jsi.core import (
     unknown,
     unsat,
 )
-from jsi.utils import pid_exists
+from jsi.utils import LogLevel, logger, pid_exists, stderr
 
 # enable debug logging
-logger.enable("jsi")
+logger.enable(console=stderr, level=LogLevel.DEBUG)
 
 
 def cmd(

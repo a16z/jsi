@@ -17,8 +17,6 @@ from typing import Any
 
 import click
 import humanize
-from loguru import logger
-from rich.console import Console
 from rich.status import Status
 from rich.table import Table
 from rich.text import Text
@@ -32,35 +30,24 @@ from jsi.core import (
     TaskResult,
     TaskStatus,
 )
-from jsi.utils import Supervisor
-
-logger.disable("jsi")
-
-console = Console()
-error_console = Console(stderr=True)
+from jsi.utils import LogLevel, Supervisor, logger, stderr
 
 
-def qprint(*args: Any, dest: Console = console) -> None:
-    """quiet print, only print if in interactive terminal"""
-    if dest.is_terminal:
-        dest.print(*args)
-
-
-def file_loc(stdout: io.TextIOWrapper | int | None) -> str:
-    return stdout.name if isinstance(stdout, io.TextIOWrapper) else ""
+def file_loc(iowrapper: io.TextIOWrapper | int | None) -> str:
+    return iowrapper.name if isinstance(iowrapper, io.TextIOWrapper) else ""
 
 
 def find_available_solvers() -> list[str]:
-    qprint("checking for solvers available on PATH:", dest=error_console)
+    stderr.print("checking for solvers available on PATH:")
     available: list[str] = []
     for solver in SOLVERS:
         if shutil.which(solver) is not None:
             available.append(solver)
-            qprint(f"{solver:>12} [green]OK[/green]", dest=error_console)
+            stderr.print(f"{solver:>12} [green]OK[/green]")
         else:
-            qprint(f"{solver:>12} not found", dest=error_console)
+            stderr.print(f"{solver:>12} not found")
 
-    qprint("", dest=error_console)
+    stderr.print()
     return available
 
 
@@ -128,7 +115,7 @@ def on_process_exit(command: Command, task: Task, status: Status):
         " returned ",
         styled_result(command.result()),
     )
-    error_console.print(message)
+    stderr.print(message)
 
     not_done = sum(1 for command in task.processes if not command.done())
     status.update(f"{not_done} solvers still running (Ctrl-C to stop)")
@@ -197,11 +184,12 @@ def main(
     file: Path, timeout: float, debug: bool, output: Path | None, full_run: bool
 ) -> int:
     if debug:
-        logger.enable("jsi")
+        logger.enable(console=stderr, level=LogLevel.DEBUG)
+
 
     solvers = find_available_solvers()
     if not solvers:
-        error_console.print("No solvers found on PATH", style="red")
+        stderr.print("No solvers found on PATH", style="red")
         return 1
 
     # output directory defaults to the parent of the input file
@@ -230,14 +218,14 @@ def main(
     task = Task(name=str(file))
     config = Config(timeout_seconds=timeout, debug=debug, early_exit=not full_run)
     status_message = "waiting for solvers (press ^C to stop)"
-    status = Status(status_message, spinner="noise", console=error_console)
+    status = Status(status_message, spinner="noise", console=stderr)
     exit_callback = partial(on_process_exit, status=status)
     controller = ProcessController(task, commands, config, exit_callback)
 
     setup_signal_handlers(controller)
 
-    error_console.print(f"Starting {len(commands)} solvers")
-    error_console.print(f"Output will be written to: {output}")
+    stderr.print(f"Starting {len(commands)} solvers")
+    stderr.print(f"Output will be written to: {output}")
     try:
         # all systems go
         controller.start()
@@ -265,13 +253,13 @@ def main(
         status.stop()
         for command in sorted(controller.commands, key=lambda x: x.elapsed() or 0):
             if command.done() and command.ok():
-                if stdout := command.stdout_text:
-                    console.print(stdout.strip())
-                    console.print(f"; (showing result for {command.name})")
+                if stdout_text := command.stdout_text:
+                    print(stdout_text.strip())
+                    print(f"; (showing result for {command.name})")
                 break
 
         table = get_results_table(controller)
-        error_console.print(table)
+        stderr.print(table)
 
 
 if __name__ == "__main__":

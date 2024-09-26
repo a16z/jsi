@@ -2,11 +2,98 @@ import contextlib
 import multiprocessing
 import os
 import signal
+import sys
 import time
+from dataclasses import dataclass
+from datetime import datetime
+from enum import Enum
+from typing import Any
 
-from loguru import logger
 
-logger.disable("jsi.utils")
+@dataclass
+class NullConsole:
+    def print(self, *args: Any, **kwargs: Any):
+        pass
+
+    @property
+    def is_terminal(self) -> bool:
+        return False
+
+
+@dataclass
+class SimpleConsole:
+    file: Any
+
+    def print(self, *args: Any, **kwargs: Any):
+        print(*args, **kwargs, file=self.file)
+
+    @property
+    def is_terminal(self) -> bool:
+        return False
+
+
+def is_terminal() -> bool:
+    return hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
+
+
+def get_consoles() -> tuple[Any, Any]:
+    if is_terminal():
+        # only pay for cost of import if we're in an interactive terminal
+        from rich.console import Console
+        return (Console(file=sys.stdout), Console(file=sys.stderr))
+    else:
+        return (SimpleConsole(file=sys.stdout), SimpleConsole(file=sys.stderr))
+
+
+class LogLevel(Enum):
+    DISABLED = 0
+    TRACE = 1
+    DEBUG = 2
+    INFO = 3
+    WARNING = 4
+    ERROR = 5
+
+
+@dataclass
+class SimpleLogger:
+    level: LogLevel = LogLevel.INFO
+    console: Any | None = None
+
+    def _log(self, level: LogLevel, message: str):
+        if not self.console:
+            return
+
+        if self.level == LogLevel.DISABLED:
+            return
+
+        if level.value >= self.level.value:
+            timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+            self.console.print(f"[{timestamp}]\t{level.name}\t{message}")
+
+    def trace(self, message: str):
+        self._log(LogLevel.TRACE, message)
+
+    def debug(self, message: str):
+        self._log(LogLevel.DEBUG, message)
+
+    def info(self, message: str):
+        self._log(LogLevel.INFO, message)
+
+    def warning(self, message: str):
+        self._log(LogLevel.WARNING, message)
+
+    def error(self, message: str):
+        self._log(LogLevel.ERROR, message)
+
+    def disable(self):
+        self.level = LogLevel.DISABLED
+        self.console = None
+
+    def enable(self, console: Any, level: LogLevel = LogLevel.INFO):
+        self.level = level
+        self.console = console
+
+
 
 
 @contextlib.contextmanager
@@ -44,7 +131,7 @@ class Supervisor(multiprocessing.Process):
 
     def run(self):
         if self.debug:
-            logger.enable("jsi.utils")
+            logger.level = LogLevel.DEBUG
 
         logger.debug(f"supervisor started (PID: {self.pid})")
         logger.debug(f"watching parent (PID: {self.parent_pid})")
@@ -72,3 +159,8 @@ class Supervisor(multiprocessing.Process):
             logger.debug("supervisor interrupted")
 
         logger.debug(f"supervisor exiting (PID: {self.pid})")
+
+
+null_console = NullConsole()
+stdout, stderr = get_consoles()
+logger = SimpleLogger()
