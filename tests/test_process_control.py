@@ -16,7 +16,8 @@ from jsi.core import (
     unknown,
     unsat,
 )
-from jsi.utils import LogLevel, logger, pid_exists, stderr
+from jsi.utils import LogLevel, logger, pid_exists
+from jsi.utils import simple_stderr as stderr
 
 # enable debug logging
 logger.enable(console=stderr, level=LogLevel.DEBUG)

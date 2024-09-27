@@ -11,12 +11,11 @@ from enum import Enum
 from subprocess import PIPE, Popen, TimeoutExpired
 
 from jsi.utils import (
-    logger,
-    get_consoles,
-    SimpleConsole,
     Printable,
-    simple_stdout,
+    get_consoles,
+    logger,
     simple_stderr,
+    simple_stdout,
 )
 
 sat, unsat, error, unknown, timeout, killed = (
@@ -177,6 +176,7 @@ class Command:
         input_file: str | None = None,
         stdout: io.TextIOWrapper | int | None = None,
         stderr: io.TextIOWrapper | int | None = None,
+        start_delay_ms: int = 0,
         **kwargs: object,  # type: ignore
     ):
         self.name = name

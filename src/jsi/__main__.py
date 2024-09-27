@@ -74,19 +74,26 @@ def get_results_table(controller: ProcessController) -> str | object:
 
 def find_available_solvers() -> list[str]:
     if os.path.exists(solver_paths):
+        stderr.print(f"Loading solver paths from cache ({solver_paths})")
         import json
+
         with open(solver_paths) as f:
-            paths = json.load(f)
+            try:
+                paths = json.load(f)
+            except json.JSONDecodeError as err:
+                logger.error(f"Error loading solver cache: {err}")
+                paths = {}
 
         available = list(paths.keys())
         if available:
             return available
 
-    stderr.print("checking for solvers available on PATH:")
+    stderr.print("Looking for solvers available on PATH:")
     available: list[str] = []
     paths: dict[str, str] = {}
 
     import shutil
+
     for solver in SOLVERS:
         path = shutil.which(solver)  # type: ignore
 
@@ -103,13 +110,13 @@ def find_available_solvers() -> list[str]:
     # save the paths to the solver_paths file
     if paths:
         import json
+
         if not os.path.exists(jsi_home):
             os.makedirs(jsi_home)
 
         with open(solver_paths, "w") as f:
             json.dump(paths, f)
 
-    stderr.print(f"found {len(available)} solvers")
     return available
 
 
@@ -248,7 +255,7 @@ def main(args: list[str]) -> int:
             # start a supervisor process in daemon mode so that it does not block
             # the program from exiting
             child_pids = [command.pid for command in controller.commands]
-            sv = Supervisor(os.getpid(), child_pids, debug=config.debug)
+            sv = Supervisor(os.getpid(), child_pids, config)
             sv.daemon = True
             sv.start()
 
@@ -269,6 +276,7 @@ def main(args: list[str]) -> int:
                 break
 
         table = get_results_table(controller)
+        stderr.print("\nResults:")
         stderr.print(table)
 
 

@@ -3,8 +3,7 @@ from rich.table import Table
 from rich.text import Text
 
 from jsi.core import Command, ProcessController, Task, TaskResult, TaskStatus
-from jsi.utils import file_loc, readable_size, get_consoles
-
+from jsi.utils import file_loc, get_consoles, readable_size
 
 _, stderr = get_consoles()
 

@@ -1,21 +1,26 @@
 import multiprocessing
 import time
 
-from jsi.utils import LogLevel, kill_process, logger, pid_exists, stderr
+from jsi.core import Config
+from jsi.utils import LogLevel, kill_process, logger, pid_exists
 
 
 class Supervisor(multiprocessing.Process):
     """Supervisor process that monitors the parent process and its children."""
 
-    def __init__(self, parent_pid: int, child_pids: list[int], debug: bool = False):
+    parent_pid: int
+    child_pids: list[int]
+    config: Config
+
+    def __init__(self, parent_pid: int, child_pids: list[int], config: Config):
         super().__init__()
         self.parent_pid = parent_pid
         self.child_pids = child_pids
-        self.debug = debug
+        self.config = config
 
     def run(self):
-        if self.debug:
-            logger.enable(console=stderr, level=LogLevel.DEBUG)
+        if self.config.debug:
+            logger.enable(console=self.config.stderr, level=LogLevel.DEBUG)
 
         logger.debug(f"supervisor started (PID: {self.pid})")
         logger.debug(f"watching parent (PID: {self.parent_pid})")

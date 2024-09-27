@@ -2,7 +2,8 @@ import csv
 import io
 
 from jsi.core import Command, ProcessController, Task, TaskResult, TaskStatus
-from jsi.utils import file_loc, stderr
+from jsi.utils import file_loc
+from jsi.utils import simple_stderr as stderr
 
 
 def get_results_csv(controller: ProcessController) -> str:
