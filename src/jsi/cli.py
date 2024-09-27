@@ -175,6 +175,8 @@ def parse_args(args: list[str]) -> Config:
                 raise SystemExit("jsi v0.1.0")
             case "--help":
                 raise SystemExit(__doc__)
+            case "--perf":
+                logger.enable(console=stderr, level=LogLevel.TRACE)
             case "--debug":
                 config.debug = True
             case "--full-run":
@@ -214,10 +216,6 @@ def parse_args(args: list[str]) -> Config:
     if config.output_dir is None:
         config.output_dir = os.path.dirname(config.input_file)
 
-    # potentially replace with rich consoles if we're in an interactive terminal
-    # (only after arg parsing so we don't pay for the import if we're not using it)
-    config.setup_consoles()
-
     return config
 
 
@@ -239,12 +237,20 @@ def main(args: list[str] | None = None) -> int:
         stdout.print(f"{err}")
         return 0
 
+    # potentially replace with rich consoles if we're in an interactive terminal
+    # (only after arg parsing so we don't pay for the import if we're not using it)
+    with timer("setup_consoles"):
+        config.setup_consoles()
+
     stdout, stderr = config.stdout, config.stderr
+    logger.console = stderr
 
     if config.debug:
         logger.enable(console=stderr, level=LogLevel.DEBUG)
 
-    solvers = find_available_solvers()
+    with timer("find_available_solvers"):
+        solvers = find_available_solvers()
+
     if not solvers:
         stderr.print("No solvers found on PATH", style="red")
         return 1
@@ -265,11 +271,6 @@ def main(args: list[str] | None = None) -> int:
         )
 
         stdout_file = os.path.join(output, f"{os.path.basename(file)}.{solver}.out")
-
-        # TODO: handle output file creation failure
-        if not stdout_file:
-            raise RuntimeError(f"failed to create output file for {command}")
-
         command.stdout = open(stdout_file, "w")  # noqa: SIM115
         commands.append(command)
 
