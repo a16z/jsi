@@ -1,6 +1,5 @@
 import csv
 import io
-from dataclasses import dataclass
 
 from jsi.core import Command, ProcessController, Task, TaskResult, TaskStatus
 from jsi.utils import file_loc, stderr
@@ -29,7 +28,6 @@ def get_results_csv(controller: ProcessController) -> str:
     return output.getvalue()
 
 
-@dataclass
 class NoopStatus:
     def start(self):
         pass

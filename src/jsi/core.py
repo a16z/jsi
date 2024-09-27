@@ -7,7 +7,6 @@ import os
 import threading
 import time
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
 from enum import Enum
 from subprocess import PIPE, Popen, TimeoutExpired
 from typing import Any
@@ -101,15 +100,20 @@ class TaskStatus(Enum):
         return NotImplemented
 
 
-@dataclass(frozen=True)
 class Config:
-    early_exit: bool = True
-    timeout_seconds: float = 0
-    debug: bool = False
-    output_dir: str | None = None
+    def __init__(
+        self,
+        early_exit: bool = True,
+        timeout_seconds: float = 0,
+        debug: bool = False,
+        output_dir: str | None = None,
+    ):
+        self.early_exit = early_exit
+        self.timeout_seconds = timeout_seconds
+        self.debug = debug
+        self.output_dir = output_dir
 
 
-@dataclass
 class Command:
     """High level wrapper for a subprocess, with extra metadata (start/end time,
     timeout, etc).
@@ -122,30 +126,57 @@ class Command:
     name: str
 
     # command line arguments
-    args: Sequence[str] = field(default_factory=list)
-    input_file: str | None = None
-    stdout: io.TextIOWrapper | int | None = None
-    stderr: io.TextIOWrapper | int | None = None
-    stdout_text: str | None = None
-    stderr_text: str | None = None
+    args: Sequence[str]
+    input_file: str | None
+    stdout: io.TextIOWrapper | int | None
+    stderr: io.TextIOWrapper | int | None
+    stdout_text: str | None
+    stderr_text: str | None
 
     # extra arguments to pass to Popen
-    kwargs: dict[str, Any] = field(default_factory=dict)
+    kwargs: dict[str, Any]
 
     # metadata
-    start_time: float | None = None
-    end_time: float | None = None
-    has_timed_out: bool = False
-    on_kill_list: bool = False
+    start_time: float | None
+    end_time: float | None
+    has_timed_out: bool
+    on_kill_list: bool
 
     # internal fields
-    _process: Popen[str] | None = None
-    _lock: threading.Lock = threading.Lock()
-    _result: TaskResult | None = None
+    _process: Popen[str] | None
+    _result: TaskResult | None
+    _lock: threading.Lock
 
     # to facilitate testing
-    start_delay_ms: int = 0
-    timer: threading.Timer | None = None
+    start_delay_ms: int
+    timer: threading.Timer | None
+
+    def __init__(
+        self,
+        name: str,
+        args: Sequence[str],
+        input_file: str | None = None,
+        stdout: io.TextIOWrapper | int | None = None,
+        stderr: io.TextIOWrapper | int | None = None,
+        **kwargs: Any,
+    ):
+        self.name = name
+        self.args = args
+        self.input_file = input_file
+        self.stdout = stdout
+        self.stderr = stderr
+        self.kwargs = kwargs
+
+        # internal fields
+        self._process = None
+        self._result = None
+        self._lock = threading.Lock()
+
+        # metadata
+        self.start_time = None
+        self.end_time = None
+        self.has_timed_out = False
+        self.on_kill_list = False
 
     def parts(self) -> list[str]:
         parts = [*self.args]
@@ -357,7 +388,6 @@ class Command:
         return self._process.pid
 
 
-@dataclass
 class Task:
     """Mutable class that keeps track of a high level task (query to be solved),
     involving potentially multiple solver subprocesses.
@@ -370,11 +400,17 @@ class Task:
     - RUNNING → NOT_STARTED is not allowed"""
 
     name: str
-    processes: list[Command] = field(default_factory=list)
-    output: str | None = None
-    _result: TaskResult | None = None
-    _status: TaskStatus = field(default=TaskStatus.NOT_STARTED, repr=False)
-    _lock: threading.Lock = threading.Lock()
+    processes: list[Command]
+    output: str | None
+    _result: TaskResult | None
+    _status: TaskStatus
+    _lock: threading.Lock
+
+    def __init__(self, name: str):
+        self.name = name
+        self.processes = []
+        self._status = TaskStatus.NOT_STARTED
+        self._lock = threading.Lock()
 
     @property
     def status(self):
@@ -446,7 +482,6 @@ def set_process_group():
     os.setpgrp()
 
 
-@dataclass(frozen=True)
 class ProcessController:
     """High level orchestration class that manages the lifecycle of a task
     and its associated subprocesses.
@@ -461,8 +496,22 @@ class ProcessController:
     task: Task
     commands: list[Command]
     config: Config
-    exit_callback: Callable[[Command, Task], None] | None = None
-    _monitors: list[threading.Thread] = field(default_factory=list)
+    exit_callback: Callable[[Command, Task], None] | None
+    _monitors: list[threading.Thread]
+
+    def __init__(
+        self,
+        task: Task,
+        commands: list[Command],
+        config: Config,
+        exit_callback: Callable[[Command, Task], None] | None = None,
+    ):
+        self.task = task
+        self.commands = commands
+        self.config = config
+        self.exit_callback = exit_callback
+        self._monitors = []
+
 
     def start(self):
         """Start the task by spawning subprocesses for each command.

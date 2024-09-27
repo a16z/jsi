@@ -4,13 +4,11 @@ import os
 import signal
 import sys
 import time
-from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from typing import Any
 
 
-@dataclass
 class NullConsole:
     def print(self, *args: Any, **kwargs: Any):
         pass
@@ -20,9 +18,9 @@ class NullConsole:
         return False
 
 
-@dataclass
 class SimpleConsole:
-    file: Any
+    def __init__(self, file: Any):
+        self.file = file
 
     def print(self, *args: Any, **kwargs: Any):
         print(*args, **kwargs, file=self.file)
@@ -55,10 +53,10 @@ class LogLevel(Enum):
     ERROR = 5
 
 
-@dataclass
 class SimpleLogger:
-    level: LogLevel = LogLevel.INFO
-    console: Any | None = None
+    def __init__(self, level: LogLevel = LogLevel.INFO):
+        self.level = level
+        self.console = None
 
     def _log(self, level: LogLevel, message: str):
         if not self.console:
