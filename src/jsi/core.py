@@ -9,7 +9,6 @@ import time
 from collections.abc import Callable, Sequence
 from enum import Enum
 from subprocess import PIPE, Popen, TimeoutExpired
-from typing import Any
 
 from jsi.utils import logger
 
@@ -34,14 +33,13 @@ SOLVERS = {
     "z3": "z3 --model".split(),
 }
 
-
-def try_closing(file: Any):
+def try_closing(file: object):
     if hasattr(file, "close"):
         with contextlib.suppress(Exception):
-            file.close()
+            file.close()  # type: ignore
 
 
-def try_reading(file: Any) -> str | None:
+def try_reading(file: object) -> str | None:
     if isinstance(file, io.TextIOWrapper):
         with open(file.name) as f:
             return f.read()
@@ -134,7 +132,7 @@ class Command:
     stderr_text: str | None
 
     # extra arguments to pass to Popen
-    kwargs: dict[str, Any]
+    kwargs: dict[str, object]
 
     # metadata
     start_time: float | None
@@ -158,7 +156,7 @@ class Command:
         input_file: str | None = None,
         stdout: io.TextIOWrapper | int | None = None,
         stderr: io.TextIOWrapper | int | None = None,
-        **kwargs: Any,
+        **kwargs: object,  # type: ignore
     ):
         self.name = name
         self.args = args
@@ -213,7 +211,7 @@ class Command:
                 self.start_time = time.time()
                 self._process = Popen(
                     self.parts(),
-                    **self.kwargs,
+                    **self.kwargs,  # type: ignore
                     stdout=self.stdout,
                     stderr=self.stderr,
                     text=True,

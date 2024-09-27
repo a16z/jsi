@@ -6,11 +6,10 @@ import sys
 import time
 from datetime import datetime
 from enum import Enum
-from typing import Any
 
 
 class NullConsole:
-    def print(self, *args: Any, **kwargs: Any):
+    def print(self, *args, **kwargs):  # type: ignore
         pass
 
     @property
@@ -19,11 +18,11 @@ class NullConsole:
 
 
 class SimpleConsole:
-    def __init__(self, file: Any):
+    def __init__(self, file: object):
         self.file = file
 
-    def print(self, *args: Any, **kwargs: Any):
-        print(*args, **kwargs, file=self.file)
+    def print(self, *args, **kwargs):  # type: ignore
+        print(*args, **kwargs, file=self.file)  # type: ignore
 
     @property
     def is_terminal(self) -> bool:
@@ -34,7 +33,7 @@ def is_terminal() -> bool:
     return hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
 
 
-def get_consoles() -> tuple[Any, Any]:
+def get_consoles() -> tuple[object, object]:
     if is_terminal():
         # only pay for cost of import if we're in an interactive terminal
         from rich.console import Console
@@ -54,6 +53,9 @@ class LogLevel(Enum):
 
 
 class SimpleLogger:
+    level: LogLevel
+    console: object | None
+
     def __init__(self, level: LogLevel = LogLevel.INFO):
         self.level = level
         self.console = None
@@ -67,7 +69,7 @@ class SimpleLogger:
 
         if level.value >= self.level.value:
             timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
-            self.console.print(f"[{timestamp}]\t{level.name}\t{message}")
+            self.console.print(f"[{timestamp}]\t{level.name}\t{message}")  # type: ignore
 
     def trace(self, message: str):
         self._log(LogLevel.TRACE, message)
@@ -88,7 +90,7 @@ class SimpleLogger:
         self.level = LogLevel.DISABLED
         self.console = None
 
-    def enable(self, console: Any, level: LogLevel = LogLevel.INFO):
+    def enable(self, console: object, level: LogLevel = LogLevel.INFO):
         self.level = level
         self.console = console
 

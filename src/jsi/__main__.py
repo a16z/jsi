@@ -12,7 +12,6 @@ import signal
 import sys
 import threading
 from functools import partial
-from typing import Any
 
 from jsi.core import (
     SOLVERS,
@@ -48,7 +47,7 @@ def get_status():
         return NoopStatus()
 
 
-def get_results_table(controller: ProcessController) -> Any:
+def get_results_table(controller: ProcessController) -> str | object:
     if is_terminal():
         from jsi.output.fancy import get_results_table
 
@@ -76,7 +75,7 @@ def find_available_solvers() -> list[str]:
 def setup_signal_handlers(controller: ProcessController):
     event = threading.Event()
 
-    def signal_listener(signum: int, frame: Any | None = None):
+    def signal_listener(signum: int, frame: object | None = None):
         event.set()
         thread_name = threading.current_thread().name
         logger.debug(f"Signal {signum} received in thread: {thread_name}")
