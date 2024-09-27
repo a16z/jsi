@@ -1,12 +1,17 @@
-"""main module for jsi.
+"""Usage: jsi [OPTIONS] FILE
 
-Usage:
-    python -m jsi [options] <path/to/query.smt2>
+Options:
+  --timeout FLOAT     Timeout in seconds.
+  --debug             Enable debug logging.
+  --full-run          Run all solvers to completion even if one succeeds.
+  --output DIRECTORY  Directory where solver output files will be written.
+  --supervisor        Run a supervisor process to avoid orphaned subprocesses.
+  --version           Show the version and exit.
+  --help              Show this message and exit.
 """
 
 import atexit
 import os
-import shutil
 import signal
 import sys
 import threading
@@ -21,7 +26,17 @@ from jsi.core import (
     TaskResult,
     TaskStatus,
 )
-from jsi.utils import LogLevel, is_terminal, logger, stdout, stderr
+from jsi.utils import (
+    LogLevel,
+    is_terminal,
+    logger,
+    simple_stderr,
+    simple_stdout,
+)
+
+stdout, stderr = simple_stdout, simple_stderr
+jsi_home = os.path.expanduser("~/.jsi")
+solver_paths = os.path.join(jsi_home, "solvers.json")
 
 
 def get_exit_callback():
@@ -58,16 +73,43 @@ def get_results_table(controller: ProcessController) -> str | object:
 
 
 def find_available_solvers() -> list[str]:
+    if os.path.exists(solver_paths):
+        import json
+        with open(solver_paths) as f:
+            paths = json.load(f)
+
+        available = list(paths.keys())
+        if available:
+            return available
+
     stderr.print("checking for solvers available on PATH:")
     available: list[str] = []
+    paths: dict[str, str] = {}
+
+    import shutil
     for solver in SOLVERS:
-        if shutil.which(solver) is not None:
-            available.append(solver)
-            stderr.print(f"{solver:>12} [green]OK[/green]")
-        else:
+        path = shutil.which(solver)  # type: ignore
+
+        if path is None:
             stderr.print(f"{solver:>12} not found")
+            continue
+
+        paths[solver] = path
+        available.append(solver)
+        stderr.print(f"{solver:>12} [green]OK[/green]")
 
     stderr.print()
+
+    # save the paths to the solver_paths file
+    if paths:
+        import json
+        if not os.path.exists(jsi_home):
+            os.makedirs(jsi_home)
+
+        with open(solver_paths, "w") as f:
+            json.dump(paths, f)
+
+    stderr.print(f"found {len(available)} solvers")
     return available
 
 
@@ -136,11 +178,19 @@ def parse_args(args: list[str]) -> Config:
     if config.output_dir is None:
         config.output_dir = os.path.dirname(config.input_file)
 
+    # potentially replace with rich consoles if we're in an interactive terminal
+    # (only after arg parsing so we don't pay for the import if we're not using it)
+    config.setup_consoles()
+
     return config
 
 
 def main(args: list[str]) -> int:
+    global stdout
+    global stderr
     config = parse_args(args)
+
+    stdout, stderr = config.stdout, config.stderr
 
     if config.debug:
         logger.enable(console=stderr, level=LogLevel.DEBUG)
@@ -181,7 +231,7 @@ def main(args: list[str]) -> int:
     setup_signal_handlers(controller)
 
     stderr.print(f"Starting {len(commands)} solvers")
-    stderr.print(f"Output will be written to: {output}")
+    stderr.print(f"Output will be written to: {output}{os.sep}")
     status = get_status()
     try:
         # all systems go

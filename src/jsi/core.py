@@ -10,7 +10,14 @@ from collections.abc import Callable, Sequence
 from enum import Enum
 from subprocess import PIPE, Popen, TimeoutExpired
 
-from jsi.utils import logger
+from jsi.utils import (
+    logger,
+    get_consoles,
+    SimpleConsole,
+    Printable,
+    simple_stdout,
+    simple_stderr,
+)
 
 sat, unsat, error, unknown, timeout, killed = (
     "sat",
@@ -32,6 +39,7 @@ SOLVERS = {
     "yices-smt2": "yices-smt2".split(),
     "z3": "z3 --model".split(),
 }
+
 
 def try_closing(file: object):
     if hasattr(file, "close"):
@@ -99,6 +107,9 @@ class TaskStatus(Enum):
 
 
 class Config:
+    stdout: Printable
+    stderr: Printable
+
     def __init__(
         self,
         early_exit: bool = True,
@@ -114,6 +125,12 @@ class Config:
         self.input_file = input_file
         self.output_dir = output_dir
         self.supervisor = supervisor
+
+        self.stdout = simple_stdout
+        self.stderr = simple_stderr
+
+    def setup_consoles(self):
+        self.stdout, self.stderr = get_consoles()
 
 
 class Command:
@@ -521,7 +538,6 @@ class ProcessController:
         self.config = config
         self.exit_callback = exit_callback
         self._monitors = []
-
 
     def start(self):
         """Start the task by spawning subprocesses for each command.

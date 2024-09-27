@@ -17,21 +17,12 @@ class Printable:
         pass
 
 
-class NullConsole(Printable):
-    def print(self, *args, **kwargs):  # type: ignore
-        pass
-
-    @property
-    def is_terminal(self) -> bool:
-        return False
-
-
 class SimpleConsole(Printable):
     def __init__(self, file: object):
         self.file = file
 
-    def print(self, *args, **kwargs):  # type: ignore
-        print(*args, **kwargs, file=self.file)  # type: ignore
+    def print(self, msg: object | None = None, style: object | None = None) -> None:
+        print(msg, file=self.file)  # type: ignore
 
     @property
     def is_terminal(self) -> bool:
@@ -49,7 +40,7 @@ def get_consoles() -> tuple[Printable, Printable]:
 
         return (Console(file=sys.stdout), Console(file=sys.stderr))  # type: ignore
     else:
-        return (SimpleConsole(file=sys.stdout), SimpleConsole(file=sys.stderr))
+        return (simple_stdout, simple_stderr)
 
 
 class LogLevel(Enum):
@@ -141,6 +132,7 @@ def readable_size(num: int | float) -> str:
         case _:
             return f"{num/(1024*1024):.1f}MiB"
 
-null_console = NullConsole()
-stdout, stderr = get_consoles()
+
 logger = SimpleLogger()
+simple_stdout = SimpleConsole(file=sys.stdout)
+simple_stderr = SimpleConsole(file=sys.stderr)

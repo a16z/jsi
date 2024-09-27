@@ -3,7 +3,10 @@ from rich.table import Table
 from rich.text import Text
 
 from jsi.core import Command, ProcessController, Task, TaskResult, TaskStatus
-from jsi.utils import file_loc, readable_size, stderr
+from jsi.utils import file_loc, readable_size, get_consoles
+
+
+_, stderr = get_consoles()
 
 
 def result_color(result: TaskResult) -> str:
