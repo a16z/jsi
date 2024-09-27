@@ -9,7 +9,6 @@ import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
 from subprocess import PIPE, Popen, TimeoutExpired
 from typing import Any
 
@@ -107,7 +106,7 @@ class Config:
     early_exit: bool = True
     timeout_seconds: float = 0
     debug: bool = False
-    output_dir: Path | None = None
+    output_dir: str | None = None
 
 
 @dataclass
@@ -124,7 +123,7 @@ class Command:
 
     # command line arguments
     args: Sequence[str] = field(default_factory=list)
-    input_file: Path | None = None
+    input_file: str | None = None
     stdout: io.TextIOWrapper | int | None = None
     stderr: io.TextIOWrapper | int | None = None
     stdout_text: str | None = None

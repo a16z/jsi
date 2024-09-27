@@ -12,7 +12,6 @@ import signal
 import sys
 import threading
 from functools import partial
-from pathlib import Path
 from typing import Any
 
 from jsi.core import (
@@ -108,8 +107,8 @@ def setup_signal_handlers(controller: ProcessController):
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Just Solve It - SMT solver runner")
-    parser.add_argument("file", type=Path, help="Path to the SMT2 file to solve")
+    parser = argparse.ArgumentParser(description="Just Solve It - SMT portfolio solver")
+    parser.add_argument("file", type=str, help="Path to the SMT2 file to solve")
     parser.add_argument("--timeout", type=float, help="Timeout in seconds")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     parser.add_argument(
@@ -119,7 +118,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--output",
-        type=Path,
+        type=str,
         help="Directory where solver output files will be written",
     )
     parser.add_argument("--version", action="version", version="jsi v0.1.0")
@@ -130,12 +129,14 @@ def main() -> int:
     )
     args = parser.parse_args(sys.argv[1:])
 
+    # TODO: validate args (file exists, output dir is directory, etc.)
     file = args.file
     timeout = args.timeout
     debug = args.debug
     full_run = args.full_run
     output = args.output
     supervisor = args.supervisor
+
     if debug:
         logger.enable(console=stderr, level=LogLevel.DEBUG)
 
@@ -146,7 +147,7 @@ def main() -> int:
 
     # output directory defaults to the parent of the input file
     if not output:
-        output = file.parent
+        output = os.path.dirname(file)
 
     # build the commands to run the solvers
     commands: list[Command] = []
@@ -157,7 +158,7 @@ def main() -> int:
             input_file=file,
         )
 
-        stdout_file = str(output / f"{file.stem}.{solver}.out")
+        stdout_file = os.path.join(output, f"{os.path.basename(file)}.{solver}.out")
 
         # TODO: handle output file creation failure
         if not stdout_file:
