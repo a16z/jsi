@@ -121,6 +121,15 @@ def file_loc(iowrapper: io.TextIOWrapper | int | None) -> str:
     return iowrapper.name if isinstance(iowrapper, io.TextIOWrapper) else ""
 
 
+def readable_size(num: int | float) -> str:
+    match num:
+        case n if n < 1024:
+            return f"{n:.1f}B"
+        case n if n < 1024 * 1024:
+            return f"{n/1024:.1f}KiB"
+        case _:
+            return f"{num/(1024*1024):.1f}MiB"
+
 null_console = NullConsole()
 stdout, stderr = get_consoles()
 logger = SimpleLogger()

@@ -15,8 +15,6 @@ click==8.1.7
 colorama==0.4.6 ; sys_platform == 'win32' or platform_system == 'Windows'
     # via click
     # via pytest
-humanize==4.10.0
-    # via jsi
 iniconfig==2.0.0
     # via pytest
 markdown-it-py==3.0.0

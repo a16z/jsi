@@ -1,10 +1,9 @@
-import humanize
 from rich.status import Status
 from rich.table import Table
 from rich.text import Text
 
 from jsi.core import Command, ProcessController, Task, TaskResult, TaskStatus
-from jsi.utils import file_loc, stderr
+from jsi.utils import file_loc, readable_size, stderr
 
 
 def result_color(result: TaskResult) -> str:
@@ -25,7 +24,7 @@ def styled_result(result: TaskResult) -> Text:
 
 
 def styled_size(size: int) -> Text:
-    return Text(humanize.naturalsize(size, gnu=True))
+    return Text(readable_size(size))
 
 
 def styled_output(command: Command) -> Text:

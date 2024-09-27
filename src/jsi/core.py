@@ -167,6 +167,10 @@ class Command:
         self.stderr = stderr
         self.kwargs = kwargs
 
+        # cached stdout/stderr
+        self.stdout_text = None
+        self.stderr_text = None
+
         # internal fields
         self._process = None
         self._result = None
@@ -177,6 +181,10 @@ class Command:
         self.end_time = None
         self.has_timed_out = False
         self.on_kill_list = False
+
+        # testing
+        self.start_delay_ms = 0
+        self.timer = None
 
     def parts(self) -> list[str]:
         parts = [*self.args]
