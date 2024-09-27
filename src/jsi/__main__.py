@@ -27,33 +27,39 @@ from jsi.core import (
     TaskResult,
     TaskStatus,
 )
-from jsi.utils import LogLevel, Supervisor, logger, stderr, is_terminal
+from jsi.utils import LogLevel, logger, stderr, is_terminal
 
 
 def get_exit_callback():
     if is_terminal():
         from jsi.output.fancy import on_process_exit, status
+
         return partial(on_process_exit, status=status)
     else:
         from jsi.output.basic import on_process_exit
+
         return on_process_exit
 
 
 def get_status():
     if is_terminal():
         from jsi.output.fancy import status
+
         return status
     else:
         from jsi.output.basic import NoopStatus
+
         return NoopStatus()
 
 
 def get_results_table(controller: ProcessController) -> Any:
     if is_terminal():
         from jsi.output.fancy import get_results_table
+
         return get_results_table(controller)
     else:
         from jsi.output.basic import get_results_csv
+
         return get_results_csv(controller)
 
 
@@ -125,17 +131,28 @@ def setup_signal_handlers(controller: ProcessController):
     required=False,
     help="Directory where solver output files will be written.",
 )
+@click.option(
+    "--supervisor",
+    type=bool,
+    help="Enable supervisor process (to prevent zombies).",
+    default=False,
+    is_flag=True,
+)
 @click.argument(
     "file",
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     required=True,
 )
 def main(
-    file: Path, timeout: float, debug: bool, output: Path | None, full_run: bool
+    file: Path,
+    timeout: float,
+    debug: bool,
+    output: Path | None,
+    full_run: bool,
+    supervisor: bool,
 ) -> int:
     if debug:
         logger.enable(console=stderr, level=LogLevel.DEBUG)
-
 
     solvers = find_available_solvers()
     if not solvers:
@@ -179,16 +196,19 @@ def main(
         controller.start()
         status.start()
 
-        # wait for the solver processes to start, we need the PIDs for the supervisor
-        while controller.task.status.value < TaskStatus.RUNNING.value:
-            pass
+        if supervisor:
+            from jsi.supervisor import Supervisor
 
-        # start a supervisor process in daemon mode so that it does not block
-        # the program from exiting
-        child_pids = [command.pid for command in controller.commands]
-        supervisor = Supervisor(os.getpid(), child_pids, debug=config.debug)
-        supervisor.daemon = True
-        supervisor.start()
+            # wait for the solver processes to start, we need the PIDs for the supervisor
+            while controller.task.status.value < TaskStatus.RUNNING.value:
+                pass
+
+            # start a supervisor process in daemon mode so that it does not block
+            # the program from exiting
+            child_pids = [command.pid for command in controller.commands]
+            sv = Supervisor(os.getpid(), child_pids, debug=config.debug)
+            sv.daemon = True
+            sv.start()
 
         # wait for the solvers to finish
         controller.join()

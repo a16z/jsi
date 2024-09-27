@@ -1,6 +1,5 @@
 import contextlib
 import io
-import multiprocessing
 import os
 import signal
 import sys
@@ -123,47 +122,6 @@ def pid_exists(pid: int) -> bool:
 
 def file_loc(iowrapper: io.TextIOWrapper | int | None) -> str:
     return iowrapper.name if isinstance(iowrapper, io.TextIOWrapper) else ""
-
-
-class Supervisor(multiprocessing.Process):
-    """Supervisor process that monitors the parent process and its children."""
-
-    def __init__(self, parent_pid: int, child_pids: list[int], debug: bool = False):
-        super().__init__()
-        self.parent_pid = parent_pid
-        self.child_pids = child_pids
-        self.debug = debug
-
-    def run(self):
-        if self.debug:
-            logger.level = LogLevel.DEBUG
-
-        logger.debug(f"supervisor started (PID: {self.pid})")
-        logger.debug(f"watching parent (PID: {self.parent_pid})")
-        logger.debug(f"watching children (PID: {self.child_pids})")
-
-        last_message_time = time.time()
-        try:
-            while True:
-                current_time = time.time()
-                if current_time - last_message_time >= 60:
-                    logger.debug(f"supervisor still running (PID: {self.pid})")
-                    last_message_time = current_time
-
-                if pid_exists(self.parent_pid):
-                    time.sleep(1)
-                    continue
-
-                logger.debug(f"parent (PID {self.parent_pid} has died)")
-                for pid in self.child_pids:
-                    kill_process(pid)
-
-                logger.debug("all children terminated, supervisor exiting.")
-                break
-        except KeyboardInterrupt:
-            logger.debug("supervisor interrupted")
-
-        logger.debug(f"supervisor exiting (PID: {self.pid})")
 
 
 null_console = NullConsole()
