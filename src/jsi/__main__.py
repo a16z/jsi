@@ -4,8 +4,8 @@ Usage:
     python -m jsi [options] <path/to/query.smt2>
 """
 
+import argparse
 import atexit
-import io
 import os
 import shutil
 import signal
@@ -14,9 +14,6 @@ import threading
 from functools import partial
 from pathlib import Path
 from typing import Any
-
-import click
-
 
 from jsi.core import (
     SOLVERS,
@@ -27,7 +24,7 @@ from jsi.core import (
     TaskResult,
     TaskStatus,
 )
-from jsi.utils import LogLevel, logger, stderr, is_terminal
+from jsi.utils import LogLevel, is_terminal, logger, stderr
 
 
 def get_exit_callback():
@@ -110,47 +107,35 @@ def setup_signal_handlers(controller: ProcessController):
     atexit.register(cleanup)
 
 
-@click.command()
-@click.version_option()
-@click.option("--timeout", type=float, help="Timeout in seconds.", show_default=True)
-@click.option("--debug", type=bool, help="Enable debug logging.", is_flag=True)
-@click.option(
-    "--full-run",
-    type=bool,
-    help=(
-        "Run all solvers to completion (by default, the first solver to finish will"
-        " cause the others to be terminated)."
-    ),
-    is_flag=True,
-    default=False,
-    show_default=True,
-)
-@click.option(
-    "--output",
-    type=click.Path(exists=True, dir_okay=True, file_okay=False, path_type=Path),
-    required=False,
-    help="Directory where solver output files will be written.",
-)
-@click.option(
-    "--supervisor",
-    type=bool,
-    help="Enable supervisor process (to prevent zombies).",
-    default=False,
-    is_flag=True,
-)
-@click.argument(
-    "file",
-    type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    required=True,
-)
-def main(
-    file: Path,
-    timeout: float,
-    debug: bool,
-    output: Path | None,
-    full_run: bool,
-    supervisor: bool,
-) -> int:
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Just Solve It - SMT solver runner")
+    parser.add_argument("file", type=Path, help="Path to the SMT2 file to solve")
+    parser.add_argument("--timeout", type=float, help="Timeout in seconds")
+    parser.add_argument("--debug", action="store_true", help="Enable debug logging")
+    parser.add_argument(
+        "--full-run",
+        action="store_true",
+        help="Run all solvers to completion, even after one succeeds",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        help="Directory where solver output files will be written",
+    )
+    parser.add_argument("--version", action="version", version="jsi v0.1.0")
+    parser.add_argument(
+        "--supervisor",
+        action="store_true",
+        help="Enable supervisor process to avoid orphaned processes.",
+    )
+    args = parser.parse_args(sys.argv[1:])
+
+    file = args.file
+    timeout = args.timeout
+    debug = args.debug
+    full_run = args.full_run
+    output = args.output
+    supervisor = args.supervisor
     if debug:
         logger.enable(console=stderr, level=LogLevel.DEBUG)
 
@@ -199,7 +184,7 @@ def main(
         if supervisor:
             from jsi.supervisor import Supervisor
 
-            # wait for the solver processes to start, we need the PIDs for the supervisor
+            # wait for the subprocesses to start, we need the PIDs for the supervisor
             while controller.task.status.value < TaskStatus.RUNNING.value:
                 pass
 

@@ -40,6 +40,7 @@ def get_consoles() -> tuple[Any, Any]:
     if is_terminal():
         # only pay for cost of import if we're in an interactive terminal
         from rich.console import Console
+
         return (Console(file=sys.stdout), Console(file=sys.stderr))
     else:
         return (SimpleConsole(file=sys.stdout), SimpleConsole(file=sys.stderr))
@@ -92,8 +93,6 @@ class SimpleLogger:
     def enable(self, console: Any, level: LogLevel = LogLevel.INFO):
         self.level = level
         self.console = console
-
-
 
 
 @contextlib.contextmanager
