@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from jsi.cli import BadParameterError, main, parse_args
+from jsi.cli import BadParameterError, parse_args
 
 
 def capture_stdout(

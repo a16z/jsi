@@ -202,7 +202,7 @@ class Command:
         self.on_kill_list = False
 
         # testing
-        self.start_delay_ms = 0
+        self.start_delay_ms = start_delay_ms
         self.timer = None
 
     def parts(self) -> list[str]:

@@ -32,6 +32,7 @@ from jsi.utils import (
     logger,
     simple_stderr,
     simple_stdout,
+    timer,
 )
 
 stdout, stderr = simple_stdout, simple_stderr
@@ -228,7 +229,8 @@ def main(args: list[str] | None = None) -> int:
         args = sys.argv[1:]
 
     try:
-        config = parse_args(args)
+        with timer("parse_args"):
+            config = parse_args(args)
     except BadParameterError as err:
         stderr.print(f"error: {err}")
         return 1
@@ -318,4 +320,3 @@ def main(args: list[str] | None = None) -> int:
         table = get_results_table(controller)
         stderr.print("\nResults:")
         stderr.print(table)
-
