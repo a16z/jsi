@@ -1,4 +1,5 @@
 import contextlib
+import io
 import multiprocessing
 import os
 import signal
@@ -118,6 +119,10 @@ def pid_exists(pid: int) -> bool:
         return True
     except ProcessLookupError:
         return False
+
+
+def file_loc(iowrapper: io.TextIOWrapper | int | None) -> str:
+    return iowrapper.name if isinstance(iowrapper, io.TextIOWrapper) else ""
 
 
 class Supervisor(multiprocessing.Process):
