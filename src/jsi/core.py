@@ -104,12 +104,16 @@ class Config:
         early_exit: bool = True,
         timeout_seconds: float = 0,
         debug: bool = False,
+        input_file: str | None = None,
         output_dir: str | None = None,
+        supervisor: bool = False,
     ):
         self.early_exit = early_exit
         self.timeout_seconds = timeout_seconds
         self.debug = debug
+        self.input_file = input_file
         self.output_dir = output_dir
+        self.supervisor = supervisor
 
 
 class Command:

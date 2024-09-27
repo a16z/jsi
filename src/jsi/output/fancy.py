@@ -77,4 +77,4 @@ def on_process_exit(command: Command, task: Task, status: Status):
 
 
 _status_message = "waiting for solvers (press ^C to stop)"
-status = Status(_status_message, spinner="noise", console=stderr)
+status = Status(_status_message, spinner="noise", console=stderr)  # type: ignore

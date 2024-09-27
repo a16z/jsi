@@ -4,7 +4,6 @@ Usage:
     python -m jsi [options] <path/to/query.smt2>
 """
 
-import argparse
 import atexit
 import os
 import shutil
@@ -22,7 +21,7 @@ from jsi.core import (
     TaskResult,
     TaskStatus,
 )
-from jsi.utils import LogLevel, is_terminal, logger, stderr
+from jsi.utils import LogLevel, is_terminal, logger, stdout, stderr
 
 
 def get_exit_callback():
@@ -105,38 +104,45 @@ def setup_signal_handlers(controller: ProcessController):
     atexit.register(cleanup)
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Just Solve It - SMT portfolio solver")
-    parser.add_argument("file", type=str, help="Path to the SMT2 file to solve")
-    parser.add_argument("--timeout", type=float, help="Timeout in seconds")
-    parser.add_argument("--debug", action="store_true", help="Enable debug logging")
-    parser.add_argument(
-        "--full-run",
-        action="store_true",
-        help="Run all solvers to completion, even after one succeeds",
-    )
-    parser.add_argument(
-        "--output",
-        type=str,
-        help="Directory where solver output files will be written",
-    )
-    parser.add_argument("--version", action="version", version="jsi v0.1.0")
-    parser.add_argument(
-        "--supervisor",
-        action="store_true",
-        help="Enable supervisor process to avoid orphaned processes.",
-    )
-    args = parser.parse_args(sys.argv[1:])
+def parse_args(args: list[str]) -> Config:
+    config = Config()
 
-    # TODO: validate args (file exists, output dir is directory, etc.)
-    file = args.file
-    timeout = args.timeout
-    debug = args.debug
-    full_run = args.full_run
-    output = args.output
-    supervisor = args.supervisor
+    for arg in args:
+        match arg:
+            case "--version":
+                stdout.print("jsi v0.1.0")
+                sys.exit(0)
+            case "--help":
+                stdout.print(__doc__)
+                sys.exit(0)
+            case "--debug":
+                config.debug = True
+            case "--full-run":
+                config.early_exit = False
+            case "--output":
+                config.output_dir = arg
+            case "--supervisor":
+                config.supervisor = True
+            case "--timeout":
+                config.timeout_seconds = float(arg)
+            case _:
+                config.input_file = arg
 
-    if debug:
+    if not config.input_file:
+        stderr.print("error: no input file provided", style="red")
+        sys.exit(1)
+
+    # output directory defaults to the parent of the input file
+    if config.output_dir is None:
+        config.output_dir = os.path.dirname(config.input_file)
+
+    return config
+
+
+def main(args: list[str]) -> int:
+    config = parse_args(args)
+
+    if config.debug:
         logger.enable(console=stderr, level=LogLevel.DEBUG)
 
     solvers = find_available_solvers()
@@ -144,11 +150,13 @@ def main() -> int:
         stderr.print("No solvers found on PATH", style="red")
         return 1
 
-    # output directory defaults to the parent of the input file
-    if not output:
-        output = os.path.dirname(file)
-
     # build the commands to run the solvers
+    file = config.input_file
+    output = config.output_dir
+
+    assert file is not None
+    assert output is not None
+
     commands: list[Command] = []
     for solver in solvers:
         command = Command(
@@ -168,7 +176,6 @@ def main() -> int:
 
     # initialize the controller
     task = Task(name=str(file))
-    config = Config(timeout_seconds=timeout, debug=debug, early_exit=not full_run)
     controller = ProcessController(task, commands, config, get_exit_callback())
 
     setup_signal_handlers(controller)
@@ -181,7 +188,7 @@ def main() -> int:
         controller.start()
         status.start()
 
-        if supervisor:
+        if config.supervisor:
             from jsi.supervisor import Supervisor
 
             # wait for the subprocesses to start, we need the PIDs for the supervisor
@@ -216,4 +223,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

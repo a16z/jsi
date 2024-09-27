@@ -8,7 +8,16 @@ from datetime import datetime
 from enum import Enum
 
 
-class NullConsole:
+class Closeable:
+    def close(self) -> None: ...
+
+
+class Printable:
+    def print(self, msg: object | None = None, style: object | None = None) -> None:  # type: ignore
+        pass
+
+
+class NullConsole(Printable):
     def print(self, *args, **kwargs):  # type: ignore
         pass
 
@@ -17,7 +26,7 @@ class NullConsole:
         return False
 
 
-class SimpleConsole:
+class SimpleConsole(Printable):
     def __init__(self, file: object):
         self.file = file
 
@@ -33,12 +42,12 @@ def is_terminal() -> bool:
     return hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
 
 
-def get_consoles() -> tuple[object, object]:
+def get_consoles() -> tuple[Printable, Printable]:
     if is_terminal():
         # only pay for cost of import if we're in an interactive terminal
         from rich.console import Console
 
-        return (Console(file=sys.stdout), Console(file=sys.stderr))
+        return (Console(file=sys.stdout), Console(file=sys.stderr))  # type: ignore
     else:
         return (SimpleConsole(file=sys.stdout), SimpleConsole(file=sys.stderr))
 
