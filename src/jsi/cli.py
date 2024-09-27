@@ -153,17 +153,27 @@ def setup_signal_handlers(controller: ProcessController):
     atexit.register(cleanup)
 
 
+class BadParameterError(Exception):
+    pass
+
+
+class SystemExitError(Exception):
+    pass
+
+
 def parse_args(args: list[str]) -> Config:
     config = Config()
 
-    for arg in args:
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        i += 1
+
         match arg:
             case "--version":
-                stdout.print("jsi v0.1.0")
-                sys.exit(0)
+                raise SystemExit("jsi v0.1.0")
             case "--help":
-                stdout.print(__doc__)
-                sys.exit(0)
+                raise SystemExit(__doc__)
             case "--debug":
                 config.debug = True
             case "--full-run":
@@ -173,13 +183,31 @@ def parse_args(args: list[str]) -> Config:
             case "--supervisor":
                 config.supervisor = True
             case "--timeout":
-                config.timeout_seconds = float(arg)
+                config.timeout_seconds = float(args[i])
+                i += 1
             case _:
+                if arg.startswith("--"):
+                    raise BadParameterError(f"unknown argument: {arg}")
+
+                if config.input_file:
+                    raise BadParameterError("multiple input files provided")
+
                 config.input_file = arg
 
     if not config.input_file:
-        stderr.print("error: no input file provided", style="red")
-        sys.exit(1)
+        raise BadParameterError("no input file provided")
+
+    if not os.path.exists(config.input_file):
+        raise BadParameterError(f"input file does not exist: {config.input_file}")
+
+    if not os.path.isfile(config.input_file):
+        raise BadParameterError(f"input file is not a file: {config.input_file}")
+
+    if config.output_dir and not os.path.exists(config.output_dir):
+        raise BadParameterError(f"output directory does not exist: {config.output_dir}")
+
+    if config.timeout_seconds < 0:
+        raise BadParameterError(f"invalid timeout value: {config.timeout_seconds}")
 
     # output directory defaults to the parent of the input file
     if config.output_dir is None:
@@ -199,7 +227,15 @@ def main(args: list[str] | None = None) -> int:
     if args is None:
         args = sys.argv[1:]
 
-    config = parse_args(args)
+    try:
+        config = parse_args(args)
+    except BadParameterError as err:
+        stderr.print(f"error: {err}")
+        return 1
+    except SystemExit as err:
+        print(f"printing to {stdout!r}")
+        stdout.print(f"{err}")
+        return 0
 
     stdout, stderr = config.stdout, config.stderr
 

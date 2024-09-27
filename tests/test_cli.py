@@ -1,12 +1,13 @@
 import io
+import subprocess
+import sys
 from collections.abc import Callable
 from contextlib import redirect_stdout
 from typing import Any
 
-import click
 import pytest
 
-from jsi.__main__ import main
+from jsi.cli import BadParameterError, main, parse_args
 
 
 def capture_stdout(
@@ -20,24 +21,26 @@ def capture_stdout(
 
 
 def test_cli_file_does_not_exist():
-    with pytest.raises(click.exceptions.BadParameter) as excinfo:
-        main(["does-not-exist.smt2"])
+    with pytest.raises(BadParameterError) as excinfo:
+        parse_args(["does-not-exist.smt2"])
     assert "does not exist" in str(excinfo.value)
 
 
 def test_cli_file_exists_but_is_directory():
-    with pytest.raises(click.exceptions.BadParameter) as excinfo:
-        main(["src/"])
-    assert "is a directory" in str(excinfo.value)
+    with pytest.raises(BadParameterError) as excinfo:
+        parse_args(["src/"])
+    assert "not a file" in str(excinfo.value)
 
 
 def test_cli_file_is_not_stdin():
-    with pytest.raises(click.exceptions.BadParameter) as excinfo:
-        main(["-"])
+    with pytest.raises(BadParameterError) as excinfo:
+        parse_args(["-"])
     assert "does not exist" in str(excinfo.value)
 
 
 def test_cli_version():
-    (result, output) = capture_stdout(main, ["--version"])
-    assert result == 0
-    assert "version 0.1.dev" in output
+    result = subprocess.run(
+        [sys.executable, "-m", "jsi", "--version"], capture_output=True, text=True
+    )
+    assert result.returncode == 0
+    assert "jsi v" in result.stdout
