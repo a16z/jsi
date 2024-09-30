@@ -6,7 +6,6 @@ authors = [
     { name = "karmacoma", email = "karma@a16z.com" }
 ]
 dependencies = [
-    "click>=8.1.7",
     "pyright>=1.1.378",
     "rich>=13.8.1",
 ]
@@ -30,6 +29,7 @@ universal = false
 dev-dependencies = [
     "pyright>=1.1.377",
     "pytest>=8.3.2",
+    "click>=8.1.7",
 ]
 
 [tool.pdm.version]
