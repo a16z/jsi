@@ -179,6 +179,13 @@ def test_controller_start_empty_commands():
         controller.start()
 
 
+def test_controller_join_before_start():
+    controller = ProcessController(task=Task(name="test"), commands=[], config=Config())
+
+    with pytest.raises(RuntimeError, match="can not join controller"):
+        controller.join()
+
+
 @pytest.mark.parametrize(
     "command,expected",
     [
@@ -358,7 +365,9 @@ def test_controller_interval_early_exit():
     command2 = cmd(sleep_ms=0, stdout="unsat")
 
     # will exit as soon as command1 is finished, won't wait the full interval
-    config = Config(early_exit=True, interval_seconds=1)
+    interval = 10
+    start = time.perf_counter()
+    config = Config(early_exit=True, interval_seconds=interval)
     controller = ProcessController(
         task=task, commands=[command1, command2], config=config
     )
@@ -368,6 +377,38 @@ def test_controller_interval_early_exit():
 
     controller.join()
 
+    assert (elapsed := time.perf_counter() - start) and elapsed < interval / 2
+
     assert command1.done()
     assert not command2.started()
+    assert task.status is TaskStatus.TERMINATED
+
+
+def test_controller_interval_full_run():
+    task = Task(name="test")
+    command1 = cmd(sleep_ms=0, stdout="sat")
+    command2 = cmd(sleep_ms=0, stdout="unsat")
+    command3 = cmd(sleep_ms=0, stdout="unknown")
+
+    # will exit as soon as command1 is finished, won't wait the full interval
+    interval = 0.1
+    start = time.perf_counter()
+    config = Config(early_exit=False, interval_seconds=interval)
+    commands = [command1, command2, command3]
+    controller = ProcessController(task=task, commands=commands, config=config)
+
+    controller.start()
+    assert task.status >= TaskStatus.STARTING
+
+    controller.join()
+
+    assert (elapsed := time.perf_counter() - start) and elapsed > 2 * interval
+
+    assert command1.done()
+    assert command2.done()
+    assert command3.done()
+
+    assert command1.start_time and command2.start_time and command3.start_time
+    assert command1.start_time < command2.start_time + interval
+    assert command2.start_time < command3.start_time + interval
     assert task.status is TaskStatus.TERMINATED

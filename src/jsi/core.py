@@ -443,8 +443,7 @@ class Task:
 
     @property
     def status(self):
-        with self._lock:
-            return self._status
+        return self._status
 
     @status.setter
     def status(self, new_status: TaskStatus):
@@ -528,6 +527,7 @@ class ProcessController:
     config: Config
     exit_callback: Callable[[Command, Task], None] | None
     _monitors: list[threading.Thread]
+    _launchers: list[threading.Timer]
 
     def __init__(
         self,
@@ -541,6 +541,7 @@ class ProcessController:
         self.config = config
         self.exit_callback = exit_callback
         self._monitors = []
+        self._launchers = []
 
     def start(self):
         """Start the task by spawning subprocesses for each command.
@@ -562,26 +563,42 @@ class ProcessController:
         set_process_group()
 
         interval_seconds = self.config.interval_seconds
-        last_command = self.commands[-1]
-        for command in self.commands:
-            if task.status != TaskStatus.STARTING:
-                logger.debug(f"aborting command starts, task is {task.status!r}")
-                break
+        if interval_seconds:
+            for i, command in enumerate(self.commands):
+                logger.debug("starting launcher threads")
+                launcher = threading.Timer(
+                    i * interval_seconds, function=self._launch_process, args=(command,)
+                )
 
-            command.start()
-            task.processes.append(command)
+                self._launchers.append(launcher)
+                launcher.start()
 
-            # spawn a thread that will monitor this process
-            monitor = threading.Thread(target=self._monitor_process, args=(command,))
-            self._monitors.append(monitor)
-            monitor.start()
+            # wait for all launchers to finish until setting status to RUNNING
+            for launcher in self._launchers:
+                launcher.join()
 
-            if interval_seconds and command is not last_command:
-                time.sleep(interval_seconds)
+        else:
+            for command in self.commands:
+                self._launch_process(command)
 
         # it's possible that some processes finished already and the status has switched
         # to TERMINATING/TERMINATED, in that case we don't want to go back to RUNNING
         task.set_status(TaskStatus.RUNNING, expected_status=TaskStatus.STARTING)
+
+    def _launch_process(self, command: Command):
+        task = self.task
+
+        if task.status != TaskStatus.STARTING:
+            logger.debug(f"aborting command starts, task is {task.status!r}")
+            return
+
+        command.start()
+        task.processes.append(command)
+
+        # spawn a thread that will monitor this process
+        monitor = threading.Thread(target=self._monitor_process, args=(command,))
+        self._monitors.append(monitor)
+        monitor.start()
 
     def _monitor_process(self, command: Command):
         """Monitor the given process for completion, wait until configured timeout.
@@ -607,9 +624,14 @@ class ProcessController:
             exit_thread.join()
 
     def join(self):
-        # TODO: add a timeout to avoid hanging forever
-        # TODO: what if the monitors have not been started yet?
-        # TODO: enforce specific task status?
+        if self.task.status == TaskStatus.NOT_STARTED:
+            raise RuntimeError("can not join controller before it is started")
+
+        logger.debug("waiting for all launchers to finish")
+        for launcher in self._launchers:
+            launcher.join()
+
+        logger.debug("waiting for all monitors to finish")
         for monitor in self._monitors:
             monitor.join()
 
@@ -620,11 +642,8 @@ class ProcessController:
             True if the task was killed, False otherwise.
         """
 
-        logger.debug("killing all processes")
-
+        # atomic lookup of the task status
         task = self.task
-
-        # atomic lookup of the task status (and acquire the lock only once)
         task_status = task.status
 
         if task_status < TaskStatus.STARTING:
@@ -634,6 +653,10 @@ class ProcessController:
         if task_status >= TaskStatus.TERMINATING:
             logger.debug(f"task {task.name!r} is already {task_status!r}")
             return False
+
+        for launcher in self._launchers:
+            logger.debug(f"cancelling launcher {launcher!r}")
+            launcher.cancel()
 
         logger.debug(f"killing solvers for {task.name!r}")
         task.status = TaskStatus.TERMINATING
