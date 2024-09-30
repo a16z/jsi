@@ -350,3 +350,24 @@ def test_controller_timeout_single_command():
 
     assert task.status is TaskStatus.TERMINATED
     assert task.result == TaskResult.TIMEOUT
+
+
+def test_controller_interval_early_exit():
+    task = Task(name="test")
+    command1 = cmd(sleep_ms=0, stdout="sat")
+    command2 = cmd(sleep_ms=0, stdout="unsat")
+
+    # will exit as soon as command1 is finished, won't wait the full interval
+    config = Config(early_exit=True, interval_seconds=1)
+    controller = ProcessController(
+        task=task, commands=[command1, command2], config=config
+    )
+
+    controller.start()
+    assert task.status >= TaskStatus.STARTING
+
+    controller.join()
+
+    assert command1.done()
+    assert not command2.started()
+    assert task.status is TaskStatus.TERMINATED

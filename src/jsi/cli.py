@@ -188,6 +188,9 @@ def parse_args(args: list[str]) -> Config:
             case "--timeout":
                 config.timeout_seconds = float(args[i])
                 i += 1
+            case "--interval":
+                config.interval_seconds = float(args[i])
+                i += 1
             case _:
                 if arg.startswith("--"):
                     raise BadParameterError(f"unknown argument: {arg}")

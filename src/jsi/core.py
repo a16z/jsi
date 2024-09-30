@@ -113,6 +113,7 @@ class Config:
         self,
         early_exit: bool = True,
         timeout_seconds: float = 0,
+        interval_seconds: float = 0,
         debug: bool = False,
         input_file: str | None = None,
         output_dir: str | None = None,
@@ -120,6 +121,7 @@ class Config:
     ):
         self.early_exit = early_exit
         self.timeout_seconds = timeout_seconds
+        self.interval_seconds = interval_seconds
         self.debug = debug
         self.input_file = input_file
         self.output_dir = output_dir
@@ -461,17 +463,18 @@ class Task:
     ):
         with self._lock:
             status = self._status
-            if new_status < status:
-                raise ValueError(f"can not switch from {status} to {new_status}")
-
-            # hard error
-            if required_status is not None and status != required_status:
-                raise ValueError(f"expected status {required_status}, got {status}")
 
             # soft error
             if expected_status is not None and status != expected_status:
                 logger.warning(f"expected status {expected_status}, got {status}")
                 return
+
+            # hard error
+            if required_status is not None and status != required_status:
+                raise ValueError(f"expected status {required_status}, got {status}")
+
+            if new_status < status:
+                raise ValueError(f"can not switch from {status} to {new_status}")
 
             logger.debug(f"setting status to {new_status}")
             self._status = new_status
@@ -558,15 +561,23 @@ class ProcessController:
 
         set_process_group()
 
+        interval_seconds = self.config.interval_seconds
+        last_command = self.commands[-1]
         for command in self.commands:
-            command.start()
+            if task.status != TaskStatus.STARTING:
+                logger.debug(f"aborting command starts, task is {task.status!r}")
+                break
 
+            command.start()
             task.processes.append(command)
 
             # spawn a thread that will monitor this process
             monitor = threading.Thread(target=self._monitor_process, args=(command,))
             self._monitors.append(monitor)
             monitor.start()
+
+            if interval_seconds and command is not last_command:
+                time.sleep(interval_seconds)
 
         # it's possible that some processes finished already and the status has switched
         # to TERMINATING/TERMINATED, in that case we don't want to go back to RUNNING
@@ -597,7 +608,7 @@ class ProcessController:
 
     def join(self):
         # TODO: add a timeout to avoid hanging forever
-        # TODO: what if the monitors have not be started yet?
+        # TODO: what if the monitors have not been started yet?
         # TODO: enforce specific task status?
         for monitor in self._monitors:
             monitor.join()
@@ -616,11 +627,11 @@ class ProcessController:
         # atomic lookup of the task status (and acquire the lock only once)
         task_status = task.status
 
-        if task_status.value < TaskStatus.RUNNING.value:
+        if task_status < TaskStatus.STARTING:
             logger.debug(f"can not kill task {task.name!r} with status {task_status!r}")
             return False
 
-        if task_status.value >= TaskStatus.TERMINATING.value:
+        if task_status >= TaskStatus.TERMINATING:
             logger.debug(f"task {task.name!r} is already {task_status!r}")
             return False
 
