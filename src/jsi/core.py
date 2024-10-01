@@ -118,6 +118,7 @@ class Config:
         input_file: str | None = None,
         output_dir: str | None = None,
         supervisor: bool = False,
+        sequence: Sequence[str] | None = None,
     ):
         self.early_exit = early_exit
         self.timeout_seconds = timeout_seconds
@@ -126,7 +127,7 @@ class Config:
         self.input_file = input_file
         self.output_dir = output_dir
         self.supervisor = supervisor
-
+        self.sequence = sequence
         self.stdout = simple_stdout
         self.stderr = simple_stderr
 

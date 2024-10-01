@@ -2,10 +2,12 @@
 
 Options:
   --timeout FLOAT     Timeout in seconds.
-  --debug             Enable debug logging.
+  --interval FLOAT    Interval in seconds between starting solvers.
   --full-run          Run all solvers to completion even if one succeeds.
+  --sequence CSV      Run only specified solvers, in the given order (e.g. a,c,b)
   --output DIRECTORY  Directory where solver output files will be written.
   --supervisor        Run a supervisor process to avoid orphaned subprocesses.
+  --debug             Enable debug logging.
   --version           Show the version and exit.
   --help              Show this message and exit.
 """
@@ -191,6 +193,9 @@ def parse_args(args: list[str]) -> Config:
             case "--interval":
                 config.interval_seconds = float(args[i])
                 i += 1
+            case "--sequence":
+                config.sequence = args[i].split(",")
+                i += 1
             case _:
                 if arg.startswith("--"):
                     raise BadParameterError(f"unknown argument: {arg}")
@@ -235,9 +240,14 @@ def main(args: list[str] | None = None) -> int:
     except BadParameterError as err:
         stderr.print(f"error: {err}")
         return 1
+    except IndexError:
+        stderr.print(f"error: missing argument after {args[-1]}")
+        return 1
+    except ValueError as err:
+        stderr.print(f"error: invalid argument {err}")
+        return 1
     except SystemExit as err:
-        print(f"printing to {stdout!r}")
-        stdout.print(f"{err}")
+        stdout.print(err)
         return 0
 
     # potentially replace with rich consoles if we're in an interactive terminal

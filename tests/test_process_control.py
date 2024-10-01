@@ -122,13 +122,6 @@ def test_cmd_can_not_start_twice():
         command.start()
 
 
-def test_command_kill_before_start():
-    command = cmd()
-
-    with pytest.raises(RuntimeError, match="can not kill controller"):
-        command.kill()
-
-
 def test_command_kill():
     # big enough that we would notice if it was not killed
     command = cmd(sleep_ms=60000)
@@ -179,18 +172,50 @@ def test_delayed_start_real_time():
     assert command.returncode == 0
 
 
-def test_controller_start_empty_commands():
+def test_controller_start_empty_commands_raises():
     controller = ProcessController(task=Task(name="test"), commands=[], config=Config())
 
     with pytest.raises(RuntimeError, match="No commands to run"):
         controller.start()
 
 
-def test_controller_join_before_start():
+def test_controller_start_twice_raises():
+    controller = ProcessController(
+        task=Task(name="test"), commands=[cmd()], config=Config()
+    )
+
+    controller.start()
+
+    with pytest.raises(ValueError, match="expected status"):
+        controller.start()
+
+    controller.join()
+
+
+def test_controller_join_before_start_raises():
     controller = ProcessController(task=Task(name="test"), commands=[], config=Config())
 
     with pytest.raises(RuntimeError, match="can not join controller"):
         controller.join()
+
+
+def test_controller_join_twice():
+    controller = ProcessController(
+        task=Task(name="test"), commands=[cmd()], config=Config()
+    )
+
+    controller.start()
+    controller.join()
+    controller.join()  # this fine, just returns immediately
+
+
+def test_controller_kill_before_start():
+    controller = ProcessController(task=Task(name="test"), commands=[], config=Config())
+
+    with pytest.raises(
+        RuntimeError, match="can not kill controller before it is started"
+    ):
+        controller.kill()
 
 
 @pytest.mark.parametrize(
