@@ -565,10 +565,10 @@ class ProcessController:
         interval_seconds = self.config.interval_seconds
         if interval_seconds:
             for i, command in enumerate(self.commands):
-                logger.debug("starting launcher threads")
                 launcher = threading.Timer(
                     i * interval_seconds, function=self._launch_process, args=(command,)
                 )
+                launcher.daemon = True
 
                 self._launchers.append(launcher)
                 launcher.start()
@@ -628,6 +628,11 @@ class ProcessController:
             raise RuntimeError("can not join controller before it is started")
 
         logger.debug("waiting for all launchers to finish")
+
+        # wait on the status first, to avoid missing new launcher or monitor threads
+        while self.task.status < TaskStatus.RUNNING:
+            pass
+
         for launcher in self._launchers:
             launcher.join()
 
@@ -645,6 +650,9 @@ class ProcessController:
         # atomic lookup of the task status
         task = self.task
         task_status = task.status
+
+        if task_status == TaskStatus.NOT_STARTED:
+            raise RuntimeError("can not kill controller before it is started")
 
         if task_status < TaskStatus.STARTING:
             logger.debug(f"can not kill task {task.name!r} with status {task_status!r}")

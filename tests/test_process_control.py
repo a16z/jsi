@@ -122,6 +122,13 @@ def test_cmd_can_not_start_twice():
         command.start()
 
 
+def test_command_kill_before_start():
+    command = cmd()
+
+    with pytest.raises(RuntimeError, match="can not kill controller"):
+        command.kill()
+
+
 def test_command_kill():
     # big enough that we would notice if it was not killed
     command = cmd(sleep_ms=60000)
