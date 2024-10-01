@@ -43,7 +43,7 @@ def get_results_table(controller: ProcessController) -> Table:
     table.add_column("size", justify="right")
 
     commands = controller.commands
-    for command in sorted(commands, key=lambda x: (not x.ok(), x.elapsed() or 0)):
+    for command in sorted(commands, key=lambda x: (not x.maybe_ok(), x.elapsed() or 0)):
         table.add_row(
             command.name,
             styled_result(command.result()),

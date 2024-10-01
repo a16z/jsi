@@ -293,6 +293,7 @@ class Command:
             raise RuntimeError(f"Process not started: {self.bin_name()}")
 
     def _ensure_finished(self):
+        self._ensure_started()
         if not self.done():
             raise RuntimeError(f"Process still running: {self._process!r}")
 
@@ -306,6 +307,18 @@ class Command:
         # - ...
 
         return self.result() in (TaskResult.SAT, TaskResult.UNSAT)
+
+    def maybe_ok(self):
+        """Non-throwing version of ok().
+
+        Returns True if the process has finished and returned sat or unsat.
+        Returns False in every other case, including not started, timeout, error, etc.
+        """
+
+        try:
+            return self.ok()
+        except RuntimeError:
+            return False
 
     def _get_result(self) -> str:
         # only valid if the process has finished
@@ -407,8 +420,9 @@ class Command:
 
     @property
     def returncode(self):
-        self._ensure_finished()
-        assert self._process is not None
+        if not self._process:
+            return None
+
         return self._process.returncode
 
     @property

@@ -276,7 +276,9 @@ def main(args: list[str] | None = None) -> int:
     assert output is not None
 
     commands: list[Command] = []
-    for solver in solvers:
+
+    # run the solvers in the specified sequence, or fallback to the default order
+    for solver in config.sequence or solvers:
         command = Command(
             name=solver,
             args=SOLVERS[solver],
@@ -332,5 +334,5 @@ def main(args: list[str] | None = None) -> int:
                 break
 
         table = get_results_table(controller)
-        stderr.print("\nResults:")
+        stderr.print()
         stderr.print(table)

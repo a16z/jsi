@@ -22,7 +22,10 @@ class SimpleConsole(Printable):
         self.file = file
 
     def print(self, msg: object | None = None, style: object | None = None) -> None:
-        print(msg, file=self.file)  # type: ignore
+        if msg is None:
+            print(file=self.file)  # type: ignore
+        else:
+            print(msg, file=self.file)  # type: ignore
 
     @property
     def is_terminal(self) -> bool:

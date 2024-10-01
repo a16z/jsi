@@ -14,7 +14,7 @@ def get_results_csv(controller: ProcessController) -> str:
     writer.writerow(["solver", "result", "exit", "time", "output file", "size"])
 
     commands = controller.commands
-    for command in sorted(commands, key=lambda x: (not x.ok(), x.elapsed() or 0)):
+    for command in sorted(commands, key=lambda x: (not x.maybe_ok(), x.elapsed() or 0)):
         writer.writerow(
             [
                 command.name,
