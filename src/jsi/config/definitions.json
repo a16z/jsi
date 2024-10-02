@@ -1,0 +1,51 @@
+{
+    "bitwuzla": {
+        "executable": "bitwuzla",
+        "model": "--produce-models",
+        "args": [],
+        "can_trust_success_return_code": true,
+        "can_trust_failure_return_code": true
+    },
+    "boolector": {
+        "executable": "boolector",
+        "model": "--model-gen",
+        "args": ["--output-number-format=hex"],
+        "can_trust_success_return_code": false,
+        "can_trust_failure_return_code": false
+    },
+    "cvc4": {
+        "executable": "cvc4",
+        "model": "--produce-models",
+        "args": [],
+        "can_trust_success_return_code": true,
+        "can_trust_failure_return_code": true
+    },
+    "cvc5": {
+        "executable": "cvc5",
+        "model": "--produce-models",
+        "args": [],
+        "can_trust_success_return_code": true,
+        "can_trust_failure_return_code": true
+    },
+    "stp": {
+        "executable": "stp",
+        "model": "--print-counterex",
+        "args": ["--SMTLIB2"],
+        "can_trust_success_return_code": true,
+        "can_trust_failure_return_code": false
+    },
+    "yices-smt2": {
+        "executable": "yices-smt2",
+        "model": null,
+        "args": [],
+        "can_trust_success_return_code": true,
+        "can_trust_failure_return_code": false
+    },
+    "z3": {
+        "executable": "z3",
+        "model": "--model",
+        "args": [],
+        "can_trust_success_return_code": true,
+        "can_trust_failure_return_code": true
+    }
+}

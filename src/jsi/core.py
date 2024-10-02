@@ -27,18 +27,6 @@ sat, unsat, error, unknown, timeout, killed = (
     "killed",
 )
 
-# maps descriptive solver names to their command line arguments
-SOLVERS = {
-    "bitwuzla": "bitwuzla --produce-models".split(),
-    "boolector": "boolector --model-gen --output-number-format=hex".split(),
-    "cvc4": "cvc4 --produce-models".split(),
-    "cvc5": "cvc5 --produce-models".split(),
-    "stp": "stp --print-counterex --SMTLIB2".split(),
-    # need to include (get-model) in the SMT2 file to generate the model with yices
-    "yices-smt2": "yices-smt2".split(),
-    "z3": "z3 --model".split(),
-}
-
 
 def try_closing(file: object):
     if hasattr(file, "close"):

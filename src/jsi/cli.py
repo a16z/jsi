@@ -19,8 +19,8 @@ import sys
 import threading
 from functools import partial
 
+from jsi.config.loader import SolverDefinition, load_definitions
 from jsi.core import (
-    SOLVERS,
     Command,
     Config,
     ProcessController,
@@ -75,7 +75,7 @@ def get_results_table(controller: ProcessController) -> str | object:
         return get_results_csv(controller)
 
 
-def find_available_solvers() -> list[str]:
+def find_available_solvers(solver_definitions: dict[str, SolverDefinition]) -> list[str]:
     if os.path.exists(solver_paths):
         stderr.print(f"Loading solver paths from cache ({solver_paths})")
         import json
@@ -97,7 +97,7 @@ def find_available_solvers() -> list[str]:
 
     import shutil
 
-    for solver in SOLVERS:
+    for solver in solver_definitions:
         path = shutil.which(solver)  # type: ignore
 
         if path is None:
@@ -160,8 +160,15 @@ class BadParameterError(Exception):
     pass
 
 
-class SystemExitError(Exception):
-    pass
+def parse_time(arg: str) -> float:
+    if arg.endswith("ms"):
+        return float(arg[:-2]) / 1000
+    elif arg.endswith("s"):
+        return float(arg[:-1])
+    elif arg.endswith("m"):
+        return float(arg[:-1]) * 60
+    else:
+        return float(arg)
 
 
 def parse_args(args: list[str]) -> Config:
@@ -188,10 +195,10 @@ def parse_args(args: list[str]) -> Config:
             case "--supervisor":
                 config.supervisor = True
             case "--timeout":
-                config.timeout_seconds = float(args[i])
+                config.timeout_seconds = parse_time(args[i])
                 i += 1
             case "--interval":
-                config.interval_seconds = float(args[i])
+                config.interval_seconds = parse_time(args[i])
                 i += 1
             case "--sequence":
                 config.sequence = args[i].split(",")
@@ -217,8 +224,14 @@ def parse_args(args: list[str]) -> Config:
     if config.output_dir and not os.path.exists(config.output_dir):
         raise BadParameterError(f"output directory does not exist: {config.output_dir}")
 
+    if config.output_dir and not os.path.isdir(config.output_dir):
+        raise BadParameterError(f"output path is not a directory: {config.output_dir}")
+
     if config.timeout_seconds < 0:
         raise BadParameterError(f"invalid timeout value: {config.timeout_seconds}")
+
+    if config.interval_seconds < 0:
+        raise BadParameterError(f"invalid interval value: {config.interval_seconds}")
 
     # output directory defaults to the parent of the input file
     if config.output_dir is None:
@@ -244,7 +257,7 @@ def main(args: list[str] | None = None) -> int:
         stderr.print(f"error: missing argument after {args[-1]}")
         return 1
     except ValueError as err:
-        stderr.print(f"error: invalid argument {err}")
+        stderr.print(f"error: invalid argument: {err}")
         return 1
     except SystemExit as err:
         stdout.print(err)
@@ -261,11 +274,19 @@ def main(args: list[str] | None = None) -> int:
     if config.debug:
         logger.enable(console=stderr, level=LogLevel.DEBUG)
 
-    with timer("find_available_solvers"):
-        solvers = find_available_solvers()
+    with timer("load_config"):
+        solver_definitions = load_definitions()
 
-    if not solvers:
-        stderr.print("No solvers found on PATH", style="red")
+    if not solver_definitions:
+        stderr.print("error: no solver definitions found", style="red")
+        return 1
+
+    with timer("find_available_solvers"):
+        # just a list of solver names
+        available_solvers: list[str] = find_available_solvers(solver_definitions)
+
+    if not available_solvers:
+        stderr.print("error: no solvers found on PATH", style="red")
         return 1
 
     # build the commands to run the solvers
@@ -276,16 +297,26 @@ def main(args: list[str] | None = None) -> int:
     assert output is not None
 
     commands: list[Command] = []
+    basename = os.path.basename(file)
 
     # run the solvers in the specified sequence, or fallback to the default order
-    for solver in config.sequence or solvers:
+    for solver_name in config.sequence or available_solvers:
+        solver_config: SolverConfig | None = solver_definitions.get(solver_name)
+        if not solver_config:
+            stderr.print(f"error: unknown solver: {solver_name}", style="red")
+            return 1
+
+        # TODO: pass the executable path, not just the name
+        args = [solver_config.executable, *solver_config.args]
+
+        # TODO: if config.model is set, add solver_config.model to the args
         command = Command(
-            name=solver,
-            args=SOLVERS[solver],
+            name=solver_name,
+            args=args,
             input_file=file,
         )
 
-        stdout_file = os.path.join(output, f"{os.path.basename(file)}.{solver}.out")
+        stdout_file = os.path.join(output, f"{basename}.{solver_name}.out")
         command.stdout = open(stdout_file, "w")  # noqa: SIM115
         commands.append(command)
 

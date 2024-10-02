@@ -63,7 +63,7 @@ class SimpleLogger:
         self.level = level
         self.console = None
 
-    def _log(self, level: LogLevel, message: str):
+    def _log(self, level: LogLevel, message: object):
         if not self.console:
             return
 
@@ -74,19 +74,19 @@ class SimpleLogger:
             timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
             self.console.print(f"[{timestamp}]\t{level.name}\t{message}")  # type: ignore
 
-    def trace(self, message: str):
+    def trace(self, message: object):
         self._log(LogLevel.TRACE, message)
 
-    def debug(self, message: str):
+    def debug(self, message: object):
         self._log(LogLevel.DEBUG, message)
 
-    def info(self, message: str):
+    def info(self, message: object):
         self._log(LogLevel.INFO, message)
 
-    def warning(self, message: str):
+    def warning(self, message: object):
         self._log(LogLevel.WARNING, message)
 
-    def error(self, message: str):
+    def error(self, message: object):
         self._log(LogLevel.ERROR, message)
 
     def disable(self):
