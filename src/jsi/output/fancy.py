@@ -74,7 +74,8 @@ def on_process_exit(command: Command, task: Task, status: Status):
     )
     stderr.print(message)
 
-    not_done = sum(1 for command in task.processes if not command.done())
+    # FIXME: we can undercount here if a solver finishes but others have not started yet
+    not_done = sum(1 for proc in task.processes if not proc.done())
     status.update(f"{not_done} solvers still running (Ctrl-C to stop)")
 
 

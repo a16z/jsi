@@ -105,15 +105,15 @@ def find_available_solvers(
 
     import shutil
 
-    for solver in solver_definitions:
-        path = shutil.which(solver)  # type: ignore
+    for solver_name, solver_def in solver_definitions.items():
+        path = shutil.which(solver_def.executable)  # type: ignore
 
         if path is None:
-            stderr.print(f"{solver:>12} not found")
+            stderr.print(f"{solver_name:>12} not found")
             continue
 
-        paths[solver] = path
-        stderr.print(f"{solver:>12} [green]OK[/green]")
+        paths[solver_name] = path
+        stderr.print(f"{solver_name:>12} [green]OK[/green]")
 
     stderr.print()
 
