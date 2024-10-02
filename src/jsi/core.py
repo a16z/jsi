@@ -108,6 +108,7 @@ class Config:
         output_dir: str | None = None,
         supervisor: bool = False,
         sequence: Sequence[str] | None = None,
+        model: bool = False,
     ):
         self.early_exit = early_exit
         self.timeout_seconds = timeout_seconds
@@ -117,6 +118,8 @@ class Config:
         self.output_dir = output_dir
         self.supervisor = supervisor
         self.sequence = sequence
+        self.model = model
+
         self.stdout = simple_stdout
         self.stderr = simple_stderr
 
@@ -592,7 +595,6 @@ class ProcessController:
 
     def _launch_process(self, command: Command):
         task = self.task
-
         if task.status != TaskStatus.STARTING:
             logger.debug(f"aborting command starts, task is {task.status!r}")
             return
@@ -616,10 +618,6 @@ class ProcessController:
         exit_thread = command.add_exit_callback(self._on_process_finished)
 
         try:
-            # Wait for the process to complete
-            # [note](https://docs.python.org/3/library/asyncio-subprocess.html#asyncio.subprocess.Process)
-            #   the Process.wait() method is asynchronous,
-            #   whereas subprocess.Popen.wait() is implemented as a blocking busy loop;
             command.wait(timeout=(self.config.timeout_seconds or None))
         except TimeoutExpired:
             logger.debug(f"timeout expired for {command.bin_name()}")

@@ -5,6 +5,7 @@ Options:
   --interval FLOAT    Interval in seconds between starting solvers.
   --full-run          Run all solvers to completion even if one succeeds.
   --sequence CSV      Run only specified solvers, in the given order (e.g. a,c,b)
+  --model             Generate a model for satisfiable instances.
   --output DIRECTORY  Directory where solver output files will be written.
   --supervisor        Run a supervisor process to avoid orphaned subprocesses.
   --debug             Enable debug logging.
@@ -191,6 +192,8 @@ def parse_args(args: list[str]) -> Config:
                 config.early_exit = False
             case "--output":
                 config.output_dir = arg
+            case "--model":
+                config.model = True
             case "--supervisor":
                 config.supervisor = True
             case "--timeout":
@@ -306,9 +309,18 @@ def main(args: list[str] | None = None) -> int:
             return 1
 
         executable_path = available_solvers[solver_name]
-        args = [executable_path, *solver_def.args]
+        args = [executable_path]
 
-        # TODO: if config.model is set, add solver_def.model to the args
+        # append the model option if requested
+        if config.model:
+            if (model_arg := solver_def.model):
+                args.append(model_arg)
+            else:
+                stderr.print(f"warn: solver {solver_name} has no model option")
+
+        # append solver-specific extra arguments
+        args.extend(solver_def.args)
+
         command = Command(
             name=solver_name,
             args=args,
