@@ -328,7 +328,9 @@ def main(args: list[str] | None = None) -> int:
         )
 
         stdout_file = os.path.join(output, f"{basename}.{solver_name}.out")
+        stderr_file = os.path.join(output, f"{basename}.{solver_name}.err")
         command.stdout = open(stdout_file, "w")  # noqa: SIM115
+        command.stderr = open(stderr_file, "w")  # noqa: SIM115
         commands.append(command)
 
     # initialize the controller
