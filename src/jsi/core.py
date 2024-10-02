@@ -737,7 +737,7 @@ class ProcessController:
         if command.started():
             elapsed = command.elapsed()
             exitcode = command.returncode
-            logger.info(f"{command.bin_name()} returned {exitcode} in {elapsed:.2f}s")
+            logger.debug(f"{command.bin_name()} returned {exitcode} in {elapsed:.2f}s")
 
             if (
                 command.ok()

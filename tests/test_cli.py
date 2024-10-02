@@ -53,6 +53,6 @@ def test_load_definitions():
     assert "bitwuzla" in definitions
     assert "cvc4" in definitions
     assert "stp" in definitions
-    assert "yices-smt2" in definitions
+    assert "yices" in definitions
     assert "boolector" in definitions
     assert "cvc5" in definitions

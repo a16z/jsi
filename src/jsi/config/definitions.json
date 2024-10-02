@@ -24,7 +24,7 @@
         "model": "--print-counterex",
         "args": ["--SMTLIB2"]
     },
-    "yices-smt2": {
+    "yices": {
         "executable": "yices-smt2",
         "model": null,
         "args": []
@@ -35,3 +35,5 @@
         "args": []
     }
 }
+
+
