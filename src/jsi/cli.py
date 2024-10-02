@@ -75,7 +75,9 @@ def get_results_table(controller: ProcessController) -> str | object:
         return get_results_csv(controller)
 
 
-def find_available_solvers(solver_definitions: dict[str, SolverDefinition]) -> list[str]:
+def find_available_solvers(
+    solver_definitions: dict[str, SolverDefinition],
+) -> list[str]:
     if os.path.exists(solver_paths):
         stderr.print(f"Loading solver paths from cache ({solver_paths})")
         import json
@@ -301,15 +303,15 @@ def main(args: list[str] | None = None) -> int:
 
     # run the solvers in the specified sequence, or fallback to the default order
     for solver_name in config.sequence or available_solvers:
-        solver_config: SolverConfig | None = solver_definitions.get(solver_name)
-        if not solver_config:
+        solver_def: SolverDefinition | None = solver_definitions.get(solver_name)
+        if not solver_def:
             stderr.print(f"error: unknown solver: {solver_name}", style="red")
             return 1
 
         # TODO: pass the executable path, not just the name
-        args = [solver_config.executable, *solver_config.args]
+        args = [solver_def.executable, *solver_def.args]
 
-        # TODO: if config.model is set, add solver_config.model to the args
+        # TODO: if config.model is set, add solver_def.model to the args
         command = Command(
             name=solver_name,
             args=args,

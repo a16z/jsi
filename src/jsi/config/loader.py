@@ -1,8 +1,8 @@
 import json
 import os
-from importlib import resources
+from importlib.resources import files
 
-from jsi.utils import logger, get_consoles
+from jsi.utils import get_consoles, logger
 
 
 class SolverDefinition:
@@ -23,6 +23,7 @@ class SolverDefinition:
             args=data["args"],  # type: ignore
         )
 
+
 def parse_definitions(data: dict[str, object]) -> dict[str, SolverDefinition]:
     """Go from unstructured definitions data to a structured format.
 
@@ -34,6 +35,7 @@ def parse_definitions(data: dict[str, object]) -> dict[str, SolverDefinition]:
         for name, definitions in data.items()  # type: ignore
     }
 
+
 def load_definitions() -> dict[str, SolverDefinition]:
     _, stderr = get_consoles()
 
@@ -44,5 +46,5 @@ def load_definitions() -> dict[str, SolverDefinition]:
             return parse_definitions(json.load(f))
 
     stderr.print(f"No custom definitions file found ({custom_path}), loading default")
-    with resources.open_text("jsi.config", "definitions.json") as f:
-        return parse_definitions(json.load(f))
+    data = files("jsi.config").joinpath("definitions.json").read_text()
+    return parse_definitions(json.loads(data))

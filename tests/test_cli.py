@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 from jsi.cli import BadParameterError, parse_args
+from jsi.config.loader import load_definitions
 
 
 def capture_stdout(
@@ -44,3 +45,14 @@ def test_cli_version():
     )
     assert result.returncode == 0
     assert "jsi v" in result.stdout
+
+
+def test_load_definitions():
+    definitions = load_definitions()
+    assert "z3" in definitions
+    assert "bitwuzla" in definitions
+    assert "cvc4" in definitions
+    assert "stp" in definitions
+    assert "yices-smt2" in definitions
+    assert "boolector" in definitions
+    assert "cvc5" in definitions
