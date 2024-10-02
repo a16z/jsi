@@ -1,16 +1,35 @@
 """Usage: jsi [OPTIONS] FILE
 
-Options:
-  --timeout FLOAT     Timeout in seconds.
-  --interval FLOAT    Interval in seconds between starting solvers.
-  --full-run          Run all solvers to completion even if one succeeds.
-  --sequence CSV      Run only specified solvers, in the given order (e.g. a,c,b)
-  --model             Generate a model for satisfiable instances.
-  --output DIRECTORY  Directory where solver output files will be written.
-  --supervisor        Run a supervisor process to avoid orphaned subprocesses.
-  --debug             Enable debug logging.
-  --version           Show the version and exit.
-  --help              Show this message and exit.
+Common options:
+  --timeout FLOAT     timeout in seconds
+  --interval FLOAT    interval in seconds between starting solvers
+  --full-run          run all solvers to completion even if one succeeds
+  --sequence CSV      run only specified solvers, in the given order (e.g. a,c,b)
+  --model             generate a model for satisfiable instances
+
+Less common options:
+  --output DIRECTORY  directory where solver output files will be written
+  --supervisor        run a supervisor process to avoid orphaned subprocesses
+  --debug             enable debug logging
+  --csv               print solver results in CSV format (<output-dir>/<input-file>.csv)
+  --perf              print performance timers
+
+Miscellaneous:
+  --version           show the version and exit
+  --help              show this message and exit
+
+Examples:
+- Run all available solvers to completion on a file with a 2.5s timeout:
+    jsi --timeout 2.5s --full-run file.smt2
+
+- Run specific solvers in sequence on a file, with some interval between solver starts:
+    jsi --sequence yices,bitwuzla,z3 --interval 100ms file.smt2
+
+- Redirect stdout to a file (only prints log messages and the final results table):
+    jsi file.smt2 1> jsi.out
+
+- Redirect stderr to a file to disable rich output (only prints winning solver output):
+    jsi file.smt2 2> jsi.err
 """
 
 import atexit
@@ -20,10 +39,9 @@ import sys
 import threading
 from functools import partial
 
-from jsi.config.loader import SolverDefinition, load_definitions
+from jsi.config.loader import Config, SolverDefinition, load_definitions
 from jsi.core import (
     Command,
-    Config,
     ProcessController,
     Task,
     TaskResult,
@@ -44,7 +62,7 @@ solver_paths = os.path.join(jsi_home, "solvers.json")
 
 
 def get_exit_callback():
-    if is_terminal():
+    if is_terminal(sys.stderr):
         from jsi.output.fancy import on_process_exit, status
 
         return partial(on_process_exit, status=status)
@@ -55,7 +73,7 @@ def get_exit_callback():
 
 
 def get_status():
-    if is_terminal():
+    if is_terminal(sys.stderr):
         from jsi.output.fancy import status
 
         return status
@@ -65,35 +83,24 @@ def get_status():
         return NoopStatus()
 
 
-def get_results_table(controller: ProcessController) -> str | object:
-    if is_terminal():
-        from jsi.output.fancy import get_results_table
-
-        return get_results_table(controller)
-    else:
-        from jsi.output.basic import get_results_csv
-
-        return get_results_csv(controller)
-
-
 def find_available_solvers(
     solver_definitions: dict[str, SolverDefinition],
 ) -> dict[str, str]:
     if os.path.exists(solver_paths):
-        stderr.print(f"Loading solver paths from cache ({solver_paths})")
+        stderr.print(f"loading solver paths from cache ({solver_paths})")
         import json
 
         with open(solver_paths) as f:
             try:
                 paths = json.load(f)
             except json.JSONDecodeError as err:
-                logger.error(f"Error loading solver cache: {err}")
+                logger.error(f"error loading solver cache: {err}")
                 paths = {}
 
         if paths:
             return paths
 
-    stderr.print("Looking for solvers available on PATH:")
+    stderr.print("looking for solvers available on PATH:")
     paths: dict[str, str] = {}
 
     import shutil
@@ -129,7 +136,7 @@ def setup_signal_handlers(controller: ProcessController):
     def signal_listener(signum: int, frame: object | None = None):
         event.set()
         thread_name = threading.current_thread().name
-        logger.debug(f"Signal {signum} received in thread: {thread_name}")
+        logger.debug(f"signal {signum} received in thread: {thread_name}")
 
     def signal_handler():
         event.wait()
@@ -194,6 +201,8 @@ def parse_args(args: list[str]) -> Config:
                 config.output_dir = arg
             case "--model":
                 config.model = True
+            case "--csv":
+                config.csv = True
             case "--supervisor":
                 config.supervisor = True
             case "--timeout":
@@ -313,7 +322,7 @@ def main(args: list[str] | None = None) -> int:
 
         # append the model option if requested
         if config.model:
-            if (model_arg := solver_def.model):
+            if model_arg := solver_def.model:
                 args.append(model_arg)
             else:
                 stderr.print(f"warn: solver {solver_name} has no model option")
@@ -339,8 +348,8 @@ def main(args: list[str] | None = None) -> int:
 
     setup_signal_handlers(controller)
 
-    stderr.print(f"Starting {len(commands)} solvers")
-    stderr.print(f"Output will be written to: {output}{os.sep}")
+    stderr.print(f"starting {len(commands)} solvers")
+    stderr.print(f"output will be written to: {output}{os.sep}")
     status = get_status()
     try:
         # all systems go
@@ -374,9 +383,22 @@ def main(args: list[str] | None = None) -> int:
             if command.done() and command.ok():
                 if stdout_text := command.stdout_text:
                     print(stdout_text.strip())
-                    print(f"; (showing result for {command.name})")
+                    print(f"; (result from {command.name})")
                 break
 
-        table = get_results_table(controller)
-        stderr.print()
-        stderr.print(table)
+        if is_terminal(sys.stderr):
+            # don't pay for the cost of importing rich (~40ms) if we're not using it
+            from jsi.output.fancy import get_results_table
+
+            table = get_results_table(controller)
+            stderr.print()
+            stderr.print(table)
+
+        if config.csv:
+            from jsi.output.basic import get_results_csv
+
+            csv = get_results_csv(controller)
+            csv_file = os.path.join(output, f"{basename}.csv")
+            stderr.print(f"writing results to: {csv_file}")
+            with open(csv_file, "w") as f:
+                f.write(csv)

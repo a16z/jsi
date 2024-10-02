@@ -10,14 +10,8 @@ from collections.abc import Callable, Sequence
 from enum import Enum
 from subprocess import PIPE, Popen, TimeoutExpired
 
-from jsi.utils import (
-    Printable,
-    get_consoles,
-    logger,
-    simple_stderr,
-    simple_stdout,
-    timer,
-)
+from jsi.config.loader import Config
+from jsi.utils import logger, timer
 
 sat, unsat, error, unknown, timeout, killed = (
     "sat",
@@ -92,39 +86,6 @@ class TaskStatus(Enum):
         if self.__class__ is other.__class__:
             return self.value < other.value
         return NotImplemented
-
-
-class Config:
-    stdout: Printable
-    stderr: Printable
-
-    def __init__(
-        self,
-        early_exit: bool = True,
-        timeout_seconds: float = 0,
-        interval_seconds: float = 0,
-        debug: bool = False,
-        input_file: str | None = None,
-        output_dir: str | None = None,
-        supervisor: bool = False,
-        sequence: Sequence[str] | None = None,
-        model: bool = False,
-    ):
-        self.early_exit = early_exit
-        self.timeout_seconds = timeout_seconds
-        self.interval_seconds = interval_seconds
-        self.debug = debug
-        self.input_file = input_file
-        self.output_dir = output_dir
-        self.supervisor = supervisor
-        self.sequence = sequence
-        self.model = model
-
-        self.stdout = simple_stdout
-        self.stderr = simple_stderr
-
-    def setup_consoles(self):
-        self.stdout, self.stderr = get_consoles()
 
 
 class Command:
@@ -325,7 +286,6 @@ class Command:
 
         stdout_content, _ = self.read_io()
         if not stdout_content:
-            logger.warning(f"no output from {self.bin_name()}")
             return unknown
 
         line = first_line(stdout_content).strip()

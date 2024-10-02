@@ -1,8 +1,43 @@
 import json
 import os
+from collections.abc import Sequence
 from importlib.resources import files
 
-from jsi.utils import get_consoles, logger
+from jsi.utils import Printable, get_consoles, logger, simple_stderr, simple_stdout
+
+
+class Config:
+    stdout: Printable
+    stderr: Printable
+
+    def __init__(
+        self,
+        early_exit: bool = True,
+        timeout_seconds: float = 0,
+        interval_seconds: float = 0,
+        debug: bool = False,
+        input_file: str | None = None,
+        output_dir: str | None = None,
+        supervisor: bool = False,
+        sequence: Sequence[str] | None = None,
+        model: bool = False,
+        csv: bool = False,
+    ):
+        self.early_exit = early_exit
+        self.timeout_seconds = timeout_seconds
+        self.interval_seconds = interval_seconds
+        self.debug = debug
+        self.input_file = input_file
+        self.output_dir = output_dir
+        self.supervisor = supervisor
+        self.sequence = sequence
+        self.model = model
+        self.csv = csv
+        self.stdout = simple_stdout
+        self.stderr = simple_stderr
+
+    def setup_consoles(self):
+        self.stdout, self.stderr = get_consoles()
 
 
 class SolverDefinition:
@@ -45,6 +80,6 @@ def load_definitions() -> dict[str, SolverDefinition]:
         with open(custom_path) as f:
             return parse_definitions(json.load(f))
 
-    stderr.print(f"No custom definitions file found ({custom_path}), loading default")
+    stderr.print(f"no custom definitions file found ({custom_path}), loading default")
     data = files("jsi.config").joinpath("definitions.json").read_text()
     return parse_definitions(json.loads(data))

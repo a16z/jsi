@@ -32,18 +32,28 @@ class SimpleConsole(Printable):
         return False
 
 
-def is_terminal() -> bool:
-    return hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
+def is_terminal(file: object) -> bool:
+    return hasattr(file, "isatty") and file.isatty()  # type: ignore
+
+
+def get_console(file: object) -> Printable:
+    if is_terminal(file):
+        from rich.console import Console
+
+        return Console(file=file)  # type: ignore
+
+    # if not a terminal, use a simple console
+    match file:
+        case sys.stdout:
+            return simple_stdout
+        case sys.stderr:
+            return simple_stderr
+        case _:
+            return SimpleConsole(file=file)
 
 
 def get_consoles() -> tuple[Printable, Printable]:
-    if is_terminal():
-        # only pay for cost of import if we're in an interactive terminal
-        from rich.console import Console
-
-        return (Console(file=sys.stdout), Console(file=sys.stderr))  # type: ignore
-    else:
-        return (simple_stdout, simple_stderr)
+    return (get_console(sys.stdout), get_console(sys.stderr))
 
 
 class LogLevel(Enum):
