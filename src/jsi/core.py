@@ -16,6 +16,7 @@ from jsi.utils import (
     logger,
     simple_stderr,
     simple_stdout,
+    timer,
 )
 
 sat, unsat, error, unknown, timeout, killed = (
@@ -581,8 +582,9 @@ class ProcessController:
                 launcher.join()
 
         else:
-            for command in self.commands:
-                self._launch_process(command)
+            with timer("_launch_process"):
+                for command in self.commands:
+                    self._launch_process(command)
 
         # it's possible that some processes finished already and the status has switched
         # to TERMINATING/TERMINATED, in that case we don't want to go back to RUNNING

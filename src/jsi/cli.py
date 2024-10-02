@@ -77,7 +77,7 @@ def get_results_table(controller: ProcessController) -> str | object:
 
 def find_available_solvers(
     solver_definitions: dict[str, SolverDefinition],
-) -> list[str]:
+) -> dict[str, str]:
     if os.path.exists(solver_paths):
         stderr.print(f"Loading solver paths from cache ({solver_paths})")
         import json
@@ -89,12 +89,10 @@ def find_available_solvers(
                 logger.error(f"Error loading solver cache: {err}")
                 paths = {}
 
-        available = list(paths.keys())
-        if available:
-            return available
+        if paths:
+            return paths
 
     stderr.print("Looking for solvers available on PATH:")
-    available: list[str] = []
     paths: dict[str, str] = {}
 
     import shutil
@@ -107,7 +105,6 @@ def find_available_solvers(
             continue
 
         paths[solver] = path
-        available.append(solver)
         stderr.print(f"{solver:>12} [green]OK[/green]")
 
     stderr.print()
@@ -122,7 +119,7 @@ def find_available_solvers(
         with open(solver_paths, "w") as f:
             json.dump(paths, f)
 
-    return available
+    return paths
 
 
 def setup_signal_handlers(controller: ProcessController):
@@ -284,8 +281,8 @@ def main(args: list[str] | None = None) -> int:
         return 1
 
     with timer("find_available_solvers"):
-        # just a list of solver names
-        available_solvers: list[str] = find_available_solvers(solver_definitions)
+        # maps solver name to executable path
+        available_solvers: dict[str, str] = find_available_solvers(solver_definitions)
 
     if not available_solvers:
         stderr.print("error: no solvers found on PATH", style="red")
@@ -308,8 +305,8 @@ def main(args: list[str] | None = None) -> int:
             stderr.print(f"error: unknown solver: {solver_name}", style="red")
             return 1
 
-        # TODO: pass the executable path, not just the name
-        args = [solver_def.executable, *solver_def.args]
+        executable_path = available_solvers[solver_name]
+        args = [executable_path, *solver_def.args]
 
         # TODO: if config.model is set, add solver_def.model to the args
         command = Command(
