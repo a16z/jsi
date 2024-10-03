@@ -1,9 +1,28 @@
-"""Usage: jsi [OPTIONS] FILE
+"""Run multiple SMT solvers in parallel and compare their results.
+
+When running on an input file (typically a .smt2 file), jsi:
+- runs all available solvers at the same time
+- waits for the first solver to finish
+- if a solver finds a solution (sat) or proves no solution exists (unsat), jsi:
+   - stops all other solvers
+   - prints the result from the successful solver on stdout
+
+jsi can be interrupted (with Ctrl+C) and it will kill all running solvers. It also
+supports a `--timeout` option to limit the runtime of each solver.
+
+To find available solvers:
+- jsi loads the solver definitions from a config file (~/.jsi/definitions.json)
+- for each solver defined in the config, jsi looks for its executable on your PATH
+- found solvers are cached in ~/.jsi/solvers.json
+
+Note: solvers are not included with jsi and must be built/installed separately.
+
+Usage: jsi [OPTIONS] FILE
 
 Common options:
-  --timeout FLOAT     timeout in seconds
-  --interval FLOAT    interval in seconds between starting solvers
-  --full-run          run all solvers to completion even if one succeeds
+  --timeout FLOAT     timeout in seconds (can also use suffix "ms", "s", "m")
+  --interval FLOAT    interval in seconds between starting solvers (default: 0s)
+  --full-run          run all solvers to completion (don't stop on first result)
   --sequence CSV      run only specified solvers, in the given order (e.g. a,c,b)
   --model             generate a model for satisfiable instances
 
@@ -25,11 +44,8 @@ Examples:
 - Run specific solvers in sequence on a file, with some interval between solver starts:
     jsi --sequence yices,bitwuzla,z3 --interval 100ms file.smt2
 
-- Redirect stdout to a file (only prints log messages and the final results table):
-    jsi file.smt2 1> jsi.out
-
 - Redirect stderr to a file to disable rich output (only prints winning solver output):
-    jsi file.smt2 2> jsi.err
+    jsi --csv file.smt2 2> jsi.err
 """
 
 import atexit
