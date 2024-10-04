@@ -7,12 +7,12 @@ When running on an input file (typically a .smt2 file), jsi:
    - stops all other solvers
    - prints the result from the successful solver on stdout
 
-jsi can be interrupted (with Ctrl+C) and it will kill all running solvers. It also
-supports a `--timeout` option to limit the runtime of each solver.
+jsi can be interrupted (with Ctrl+C) and it will kill all running solvers.
+It also supports a `--timeout` option to limit the runtime of each solver.
 
 To find available solvers:
 - jsi loads the solver definitions from a config file (~/.jsi/definitions.json)
-- for each solver defined in the config, jsi looks for its executable on your PATH
+- for each defined solver, jsi looks for the executable on your PATH
 - found solvers are cached in ~/.jsi/solvers.json
 
 Note: solvers are not included with jsi and must be built/installed separately.
@@ -20,7 +20,7 @@ Note: solvers are not included with jsi and must be built/installed separately.
 Usage: jsi [OPTIONS] FILE
 
 Common options:
-  --timeout FLOAT     timeout in seconds (can also use suffix "ms", "s", "m")
+  --timeout FLOAT     timeout in seconds (can also use unit suffixes: "ms", "s")
   --interval FLOAT    interval in seconds between starting solvers (default: 0s)
   --full-run          run all solvers to completion (don't stop on first result)
   --sequence CSV      run only specified solvers, in the given order (e.g. a,c,b)
@@ -30,7 +30,7 @@ Less common options:
   --output DIRECTORY  directory where solver output files will be written
   --supervisor        run a supervisor process to avoid orphaned subprocesses
   --debug             enable debug logging
-  --csv               print solver results in CSV format (<output-dir>/<input-file>.csv)
+  --csv               print solver results in CSV format (<output>/<input>.csv)
   --perf              print performance timers
 
 Miscellaneous:
