@@ -1,4 +1,5 @@
 import os
+import signal
 import socket
 import threading
 
@@ -17,12 +18,14 @@ from jsi.core import (
     base_commands,
     set_input_output,
 )
+from jsi.utils import pid_exists
+import contextlib
 
 SERVER_HOME = os.path.expanduser("~/.jsi/daemon")
 SOCKET_PATH = os.path.join(SERVER_HOME, "server.sock")
 STDOUT_PATH = os.path.join(SERVER_HOME, "server.out")
 STDERR_PATH = os.path.join(SERVER_HOME, "server.err")
-
+PID_PATH = os.path.join(SERVER_HOME, "server.pid")
 CONN_BUFFER_SIZE = 1024
 
 # TODO: handle signal.SIGCHLD (received when a child process exits)
@@ -50,6 +53,40 @@ class ResultListener:
 
         assert self._result is not None
         return self._result
+
+
+class PIDFile:
+    def __init__(self, path: str):
+        self.path = path
+
+    def __enter__(self):
+        if os.path.exists(self.path):
+            print(f"pid file already exists: {self.path}")
+
+            with open(self.path) as fd:
+                other_pid = fd.read()
+
+            if pid_exists(int(other_pid)):
+                print(f"killing existing daemon ({other_pid=})")
+                os.kill(int(other_pid), signal.SIGKILL)
+
+            # the file may have been removed on termination by another instance
+            with contextlib.suppress(FileNotFoundError):
+                os.remove(self.path)
+
+        pid = os.getpid()
+        print(f"creating pid file: {self.path} ({pid=})")
+        with open(self.path, "w") as fd:
+            fd.write(str(pid))
+
+        return self.path
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        print(f"removing pid file: {self.path}")
+
+        # ignore if the file was already removed
+        with contextlib.suppress(FileNotFoundError):
+            os.remove(self.path)
 
 
 class Server:
@@ -86,44 +123,46 @@ class Server:
 
         return listener.result
 
-        # controller.join()
-        # return get_results_csv(controller)
 
-    def start(self):
-        if os.path.exists(SOCKET_PATH):
-            print(f"removing existing socket: {SOCKET_PATH}")
-            os.remove(SOCKET_PATH)
+    def start(self, detach_process: bool | None = None):
+        if not os.path.exists(SERVER_HOME):
+            print(f"creating server home: {SERVER_HOME}")
+            os.makedirs(SERVER_HOME)
 
-        print(f"binding socket: {SOCKET_PATH}")
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
-            server.bind(SOCKET_PATH)
+        stdout_file = open(STDOUT_PATH, "w+")  # noqa: SIM115
+        stderr_file = open(STDERR_PATH, "w+")  # noqa: SIM115
 
-            print(f"listening on {SOCKET_PATH}")
-            server.listen(1)
+        print(f"daemonizing... (`tail -f {STDOUT_PATH[:-4]}.{{err,out}}` to view logs)")
+        with daemon.DaemonContext(
+            stdout=stdout_file,
+            stderr=stderr_file,
+            detach_process=detach_process,
+            pidfile=PIDFile(PID_PATH),
+        ):
+            if os.path.exists(SOCKET_PATH):
+                print(f"removing existing socket: {SOCKET_PATH}")
+                os.remove(SOCKET_PATH)
 
-            while True:
-                conn, _ = server.accept()
-                # print(f"accepted connection from {conn}")
+            print(f"binding socket: {SOCKET_PATH}")
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
+                server.bind(SOCKET_PATH)
+                server.listen(1)
 
-                with conn:
+                while True:
                     try:
-                        data = conn.recv(CONN_BUFFER_SIZE).decode()
-                        if not data:
-                            continue
-                        conn.sendall(self.solve(data).encode())
-                    except ConnectionError as e:
-                        print(f"connection error: {e}")
-
+                        conn, _ = server.accept()
+                        with conn:
+                            try:
+                                data = conn.recv(CONN_BUFFER_SIZE).decode()
+                                if not data:
+                                    continue
+                                conn.sendall(self.solve(data).encode())
+                            except ConnectionError as e:
+                                print(f"connection error: {e}")
+                    except SystemExit as e:
+                        print(f"system exit: {e}")
+                        return e.code
 
 
 if __name__ == "__main__":
-    if not os.path.exists(SERVER_HOME):
-        print(f"creating server home: {SERVER_HOME}")
-        os.makedirs(SERVER_HOME)
-
-    stdout_file = open(STDOUT_PATH, "w+")  # noqa: SIM115
-    stderr_file = open(STDERR_PATH, "w+")  # noqa: SIM115
-
-    print("daemonizing...")
-    with daemon.DaemonContext(stdout=stdout_file, stderr=stderr_file):
-        Server(Config()).start()
+    Server(Config()).start()

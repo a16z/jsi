@@ -259,6 +259,13 @@ def main(args: list[str] | None = None) -> int:
     if config.debug:
         logger.enable(console=stderr, level=LogLevel.DEBUG)
 
+    if config.daemon:
+        from jsi.server import Server
+
+        server = Server(config)
+        server.start(detach_process=True)
+        return 0
+
     with timer("load_config"):
         solver_definitions = load_definitions(config)
 
@@ -273,13 +280,6 @@ def main(args: list[str] | None = None) -> int:
     if not available_solvers:
         stderr.print("error: no solvers found on PATH", style="red")
         return 1
-
-    if config.daemon:
-        from jsi.server import Server
-
-        server = Server(config)
-        server.start()
-        return 0
 
     # build the commands to run the solvers
     # run the solvers in the specified sequence, or fallback to the default order
