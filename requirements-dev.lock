@@ -14,8 +14,12 @@ click==8.1.7
 colorama==0.4.6 ; sys_platform == 'win32' or platform_system == 'Windows'
     # via click
     # via pytest
+docutils==0.21.2
+    # via python-daemon
 iniconfig==2.0.0
     # via pytest
+lockfile==0.12.2
+    # via python-daemon
 markdown-it-py==3.0.0
     # via rich
 mdurl==0.1.2
@@ -31,5 +35,9 @@ pygments==2.18.0
 pyright==1.1.378
     # via jsi
 pytest==8.3.2
+python-daemon==3.0.1
+    # via jsi
 rich==13.8.1
     # via jsi
+setuptools==75.1.0
+    # via python-daemon
