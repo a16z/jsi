@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 from jsi.cli import BadParameterError, parse_args
-from jsi.config.loader import load_definitions
+from jsi.config.loader import Config, load_definitions
 
 
 def capture_stdout(
@@ -48,7 +48,7 @@ def test_cli_version():
 
 
 def test_load_definitions():
-    definitions = load_definitions()
+    definitions = load_definitions(Config())
     assert "z3" in definitions
     assert "bitwuzla" in definitions
     assert "cvc4" in definitions

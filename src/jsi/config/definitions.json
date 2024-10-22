@@ -33,7 +33,10 @@
         "executable": "z3",
         "model": "--model",
         "args": []
+    },
+    "always-sat": {
+        "executable": "echo",
+        "model": null,
+        "args": ["sat", "\n; input:"]
     }
 }
-
-

@@ -55,13 +55,15 @@ import sys
 import threading
 from functools import partial
 
-from jsi.config.loader import Config, SolverDefinition, load_definitions
+from jsi.config.loader import Config, find_available_solvers, load_definitions
 from jsi.core import (
     Command,
     ProcessController,
     Task,
     TaskResult,
     TaskStatus,
+    base_commands,
+    set_input_output,
 )
 from jsi.utils import (
     LogLevel,
@@ -97,53 +99,6 @@ def get_status():
         from jsi.output.basic import NoopStatus
 
         return NoopStatus()
-
-
-def find_available_solvers(
-    solver_definitions: dict[str, SolverDefinition],
-) -> dict[str, str]:
-    if os.path.exists(solver_paths):
-        stderr.print(f"loading solver paths from cache ({solver_paths})")
-        import json
-
-        with open(solver_paths) as f:
-            try:
-                paths = json.load(f)
-            except json.JSONDecodeError as err:
-                logger.error(f"error loading solver cache: {err}")
-                paths = {}
-
-        if paths:
-            return paths
-
-    stderr.print("looking for solvers available on PATH:")
-    paths: dict[str, str] = {}
-
-    import shutil
-
-    for solver_name, solver_def in solver_definitions.items():
-        path = shutil.which(solver_def.executable)  # type: ignore
-
-        if path is None:
-            stderr.print(f"{solver_name:>12} not found")
-            continue
-
-        paths[solver_name] = path
-        stderr.print(f"{solver_name:>12} [green]OK[/green]")
-
-    stderr.print()
-
-    # save the paths to the solver_paths file
-    if paths:
-        import json
-
-        if not os.path.exists(jsi_home):
-            os.makedirs(jsi_home)
-
-        with open(solver_paths, "w") as f:
-            json.dump(paths, f)
-
-    return paths
 
 
 def setup_signal_handlers(controller: ProcessController):
@@ -221,6 +176,8 @@ def parse_args(args: list[str]) -> Config:
                 config.csv = True
             case "--supervisor":
                 config.supervisor = True
+            case "--daemon":
+                config.daemon = True
             case "--timeout":
                 config.timeout_seconds = parse_time(args[i])
                 i += 1
@@ -239,14 +196,15 @@ def parse_args(args: list[str]) -> Config:
 
                 config.input_file = arg
 
-    if not config.input_file:
-        raise BadParameterError("no input file provided")
+    if not config.daemon:
+        if not config.input_file:
+            raise BadParameterError("no input file provided")
 
-    if not os.path.exists(config.input_file):
-        raise BadParameterError(f"input file does not exist: {config.input_file}")
+        if not os.path.exists(config.input_file):
+            raise BadParameterError(f"input file does not exist: {config.input_file}")
 
-    if not os.path.isfile(config.input_file):
-        raise BadParameterError(f"input file is not a file: {config.input_file}")
+        if not os.path.isfile(config.input_file):
+            raise BadParameterError(f"input file is not a file: {config.input_file}")
 
     if config.output_dir and not os.path.exists(config.output_dir):
         raise BadParameterError(f"output directory does not exist: {config.output_dir}")
@@ -261,7 +219,7 @@ def parse_args(args: list[str]) -> Config:
         raise BadParameterError(f"invalid interval value: {config.interval_seconds}")
 
     # output directory defaults to the parent of the input file
-    if config.output_dir is None:
+    if config.output_dir is None and config.input_file:
         config.output_dir = os.path.dirname(config.input_file)
 
     return config
@@ -301,8 +259,16 @@ def main(args: list[str] | None = None) -> int:
     if config.debug:
         logger.enable(console=stderr, level=LogLevel.DEBUG)
 
+    if config.daemon:
+        import jsi.server
+
+        # this detaches the server from the current shell,
+        # this returns immediately, leaving the server running in the background
+        jsi.server.daemonize(config)
+        return 0
+
     with timer("load_config"):
-        solver_definitions = load_definitions()
+        solver_definitions = load_definitions(config)
 
     if not solver_definitions:
         stderr.print("error: no solver definitions found", style="red")
@@ -310,62 +276,31 @@ def main(args: list[str] | None = None) -> int:
 
     with timer("find_available_solvers"):
         # maps solver name to executable path
-        available_solvers: dict[str, str] = find_available_solvers(solver_definitions)
+        available_solvers = find_available_solvers(solver_definitions, config)
 
     if not available_solvers:
         stderr.print("error: no solvers found on PATH", style="red")
         return 1
 
     # build the commands to run the solvers
-    file = config.input_file
-    output = config.output_dir
-
-    assert file is not None
-    assert output is not None
-
-    commands: list[Command] = []
-    basename = os.path.basename(file)
-
     # run the solvers in the specified sequence, or fallback to the default order
-    for solver_name in config.sequence or available_solvers:
-        solver_def: SolverDefinition | None = solver_definitions.get(solver_name)
-        if not solver_def:
-            stderr.print(f"error: unknown solver: {solver_name}", style="red")
-            return 1
+    commands: list[Command] = base_commands(
+        config.sequence or list(available_solvers.keys()),
+        solver_definitions,
+        available_solvers,
+        config,
+    )
 
-        executable_path = available_solvers[solver_name]
-        args = [executable_path]
-
-        # append the model option if requested
-        if config.model:
-            if model_arg := solver_def.model:
-                args.append(model_arg)
-            else:
-                stderr.print(f"warn: solver {solver_name} has no model option")
-
-        # append solver-specific extra arguments
-        args.extend(solver_def.args)
-
-        command = Command(
-            name=solver_name,
-            args=args,
-            input_file=file,
-        )
-
-        stdout_file = os.path.join(output, f"{basename}.{solver_name}.out")
-        stderr_file = os.path.join(output, f"{basename}.{solver_name}.err")
-        command.stdout = open(stdout_file, "w")  # noqa: SIM115
-        command.stderr = open(stderr_file, "w")  # noqa: SIM115
-        commands.append(command)
+    set_input_output(commands, config)
 
     # initialize the controller
-    task = Task(name=str(file))
+    task = Task(name=str(config.input_file))
     controller = ProcessController(task, commands, config, get_exit_callback())
 
     setup_signal_handlers(controller)
 
     stderr.print(f"starting {len(commands)} solvers")
-    stderr.print(f"output will be written to: {output}{os.sep}")
+    stderr.print(f"output will be written to: {config.output_dir}{os.sep}")
     status = get_status()
     try:
         # all systems go
@@ -414,7 +349,12 @@ def main(args: list[str] | None = None) -> int:
             from jsi.output.basic import get_results_csv
 
             csv = get_results_csv(controller)
-            csv_file = os.path.join(output, f"{basename}.csv")
+
+            assert config.input_file is not None
+            assert config.output_dir is not None
+
+            basename = os.path.basename(config.input_file)
+            csv_file = os.path.join(config.output_dir, f"{basename}.csv")
             stderr.print(f"writing results to: {csv_file}")
             with open(csv_file, "w") as f:
                 f.write(csv)

@@ -10,7 +10,7 @@ from collections.abc import Callable, Sequence
 from enum import Enum
 from subprocess import PIPE, Popen, TimeoutExpired
 
-from jsi.config.loader import Config
+from jsi.config.loader import Config, SolverDefinition
 from jsi.utils import logger, timer
 
 sat, unsat, error, unknown, timeout, killed = (
@@ -382,6 +382,57 @@ class Command:
         self._ensure_started()
         assert self._process is not None
         return self._process.pid
+
+
+def base_commands(
+    solver_names: Sequence[str],
+    solver_definitions: dict[str, SolverDefinition],
+    available_solvers: dict[str, str],
+    config: Config,
+) -> list[Command]:
+    """Command "templates" corresponding to a particular configuration,
+    but without input and output filenames."""
+    commands: list[Command] = []
+
+    for solver_name in solver_names:
+        solver_def: SolverDefinition | None = solver_definitions.get(solver_name)
+        if not solver_def:
+            raise RuntimeError(f"unknown solver: {solver_name}")
+
+        executable_path = available_solvers[solver_name]
+        args = [executable_path]
+
+        # append the model option if requested
+        if config.model and (model_arg := solver_def.model):
+            args.append(model_arg)
+
+        # append solver-specific extra arguments
+        args.extend(solver_def.args)
+        commands.append(
+            Command(
+                name=solver_name,
+                args=args,
+            )
+        )
+
+    return commands
+
+
+def set_input_output(commands: list[Command], config: Config):
+    file = config.input_file
+    output = config.output_dir
+
+    assert file is not None
+    assert output is not None
+
+    basename = os.path.basename(file)
+
+    for command in commands:
+        command.input_file = file
+        stdout_file = os.path.join(output, f"{basename}.{command.name}.out")
+        stderr_file = os.path.join(output, f"{basename}.{command.name}.err")
+        command.stdout = open(stdout_file, "w")  # noqa: SIM115
+        command.stderr = open(stderr_file, "w")  # noqa: SIM115
 
 
 class Task:

@@ -8,6 +8,7 @@ authors = [
 dependencies = [
     "pyright>=1.1.378",
     "rich>=13.8.1",
+    "python-daemon>=3.0.1",
 ]
 readme = "README.md"
 requires-python = ">= 3.11"
