@@ -37,6 +37,15 @@
     "always-sat": {
         "executable": "echo",
         "model": null,
-        "args": ["sat", "\n; input:"]
+        "args": ["sat", "\n; input:"],
+        "enabled": false,
+        "meta": "for testing purposes"
+    },
+    "always-unsat": {
+        "executable": "echo",
+        "model": null,
+        "args": ["unsat", "\n; input:"],
+        "enabled": false,
+        "meta": "for testing purposes"
     }
 }

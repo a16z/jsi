@@ -59,10 +59,17 @@ class SolverDefinition:
     model: str | None
     args: list[str]
 
-    def __init__(self, executable: str, model: str | None, args: list[str]):
+    def __init__(
+        self,
+        executable: str,
+        model: str | None,
+        args: list[str],
+        enabled: bool = True,
+    ):
         self.executable = executable
         self.model = model
         self.args = args
+        self.enabled = enabled
 
     @classmethod
     def from_dict(cls, data: dict[str, str | None | list[str]]) -> "SolverDefinition":
@@ -70,6 +77,7 @@ class SolverDefinition:
             executable=data["executable"],  # type: ignore
             model=data["model"],  # type: ignore
             args=data["args"],  # type: ignore
+            enabled=data.get("enabled", True),  # type: ignore
         )
 
 
