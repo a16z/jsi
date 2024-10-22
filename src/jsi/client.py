@@ -9,7 +9,7 @@ from jsi.server import SOCKET_PATH
 def send_command(command: str):
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
         try:
-            client.connect(SOCKET_PATH)
+            client.connect(SOCKET_PATH.as_posix())
             client.sendall(command.encode())
             response = client.recv(4096).decode()
             print(response)

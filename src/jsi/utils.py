@@ -8,6 +8,7 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 
+
 class Closeable:
     def close(self) -> None: ...
 
