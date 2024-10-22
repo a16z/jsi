@@ -6,7 +6,7 @@ import sys
 import time
 from datetime import datetime
 from enum import Enum
-
+from pathlib import Path
 
 class Closeable:
     def close(self) -> None: ...
@@ -30,6 +30,10 @@ class SimpleConsole(Printable):
     @property
     def is_terminal(self) -> bool:
         return False
+
+
+def unexpand_home(path: str | Path) -> str:
+    return str(path).replace(str(Path.home()), "~")
 
 
 def is_terminal(file: object) -> bool:

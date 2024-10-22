@@ -1,0 +1,9 @@
+[package]
+name = "jsif"
+version = "0.1.0"
+edition = "2021"
+description = "just solve it fast - rust client for the jsi daemon"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]

@@ -260,22 +260,11 @@ def main(args: list[str] | None = None) -> int:
         logger.enable(console=stderr, level=LogLevel.DEBUG)
 
     if config.daemon:
-        import asyncio
+        import jsi.server
 
-        import daemon
-
-        from jsi.server import STDERR_PATH, STDOUT_PATH, Server
-
-        async def run_server():
-            server = Server(config)
-            await server.start()
-
-        stdout_file = open(STDOUT_PATH, "w+")  # noqa: SIM115
-        stderr_file = open(STDERR_PATH, "w+")  # noqa: SIM115
-
-        with daemon.DaemonContext(stdout=stdout_file, stderr=stderr_file):
-            asyncio.run(run_server())
-
+        # this detaches the server from the current shell,
+        # this returns immediately, leaving the server running in the background
+        jsi.server.daemonize(config)
         return 0
 
     with timer("load_config"):

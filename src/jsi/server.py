@@ -1,9 +1,34 @@
+"""
+A daemon that listens for requests on a unix socket.
+
+Can be started with:
+
+    # with a command line interface to parse the config:
+    jsi [options] --daemon
+
+    # or with a default config:
+    python -m jsi.server
+
+These commands return immediately, as a detached daemon runs in the background.
+
+The daemon:
+- checks if there is an existing daemon (as indicated by ~/.jsi/daemon/server.pid)
+- it kills the existing daemon if found
+- it writes its own pid to ~/.jsi/daemon/server.pid
+- it outputs logs to ~/.jsi/daemon/server.{err,out}
+- it listens for requests on a unix domain socket (by default ~/.jsi/daemon/server.sock)
+- each request is a single line of text, the path to a file to solve
+- for each request, it runs the sequence of solvers defined in the config
+- it returns the output of the solvers, based on the config
+- it runs until terminated by the user or another daemon
+"""
+
 import asyncio
 import contextlib
 import os
 import signal
-import socket
 import threading
+from pathlib import Path
 
 import daemon  # type: ignore
 
@@ -20,17 +45,35 @@ from jsi.core import (
     base_commands,
     set_input_output,
 )
-from jsi.utils import pid_exists
+from jsi.utils import get_consoles, pid_exists, unexpand_home
 
-SERVER_HOME = os.path.expanduser("~/.jsi/daemon")
-SOCKET_PATH = os.path.join(SERVER_HOME, "server.sock")
-STDOUT_PATH = os.path.join(SERVER_HOME, "server.out")
-STDERR_PATH = os.path.join(SERVER_HOME, "server.err")
-PID_PATH = os.path.join(SERVER_HOME, "server.pid")
+SERVER_HOME = Path.home() / ".jsi" / "daemon"
+SOCKET_PATH = SERVER_HOME / "server.sock"
+STDOUT_PATH = SERVER_HOME / "server.out"
+STDERR_PATH = SERVER_HOME / "server.err"
+PID_PATH = SERVER_HOME / "server.pid"
 CONN_BUFFER_SIZE = 1024
 
-# TODO: handle signal.SIGCHLD (received when a child process exits)
-# TODO: check if there is an existing daemon
+
+unexpanded_pid = unexpand_home(PID_PATH)
+server_usage = f"""[bold white]starting daemon...[/]
+
+- tail logs:
+    [green]tail -f {unexpand_home(STDERR_PATH)[:-4]}.{{err,out}}[/]
+
+- view pid of running daemon:
+    [green]cat {unexpanded_pid}[/]
+
+- display useful info about current daemon:
+    [green]ps -o pid,etime,command -p $(cat {unexpanded_pid})[/]
+
+- terminate daemon (gently, with SIGTERM):
+    [green]kill $(cat {unexpanded_pid})[/]
+
+- terminate daemon (forcefully, with SIGKILL):
+    [green]kill -9 $(cat {unexpanded_pid})[/]
+
+(use the commands above to monitor the daemon, this process will exit immediately)"""
 
 
 class ResultListener:
@@ -57,9 +100,10 @@ class ResultListener:
 
 
 class PIDFile:
-    def __init__(self, path: str):
+    def __init__(self, path: Path):
         self.path = path
-        self.pid = os.getpid()
+        # don't get the pid here, as it may not be the current pid anymore
+        # by the time we enter the context manager
 
     def __enter__(self):
         try:
@@ -70,18 +114,22 @@ class PIDFile:
             if pid_exists(int(other_pid)):
                 print(f"killing existing daemon ({other_pid=})")
                 os.kill(int(other_pid), signal.SIGKILL)
+
+            else:
+                print(f"pid file points to dead daemon ({other_pid=})")
         except FileNotFoundError:
             # pid file doesn't exist, we're good to go
             pass
 
         # overwrite the file if it already exists
+        pid = os.getpid()
         with open(self.path, "w") as fd:
-            fd.write(str(self.pid))
+            fd.write(str(pid))
 
-        print(f"created pid file: {self.path} ({self.pid=})")
+        print(f"created pid file: {self.path} ({pid=})")
         return self.path
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(self, exc_type, exc_value, traceback):  # type: ignore
         print(f"removing pid file: {self.path}")
 
         # ignore if the file was already removed
@@ -101,10 +149,11 @@ class Server:
 
     async def start(self):
         server = await asyncio.start_unix_server(
-            self.handle_client, path=SOCKET_PATH
+            self.handle_client, path=str(SOCKET_PATH)
         )
 
         async with server:
+            print(f"server started on {unexpand_home(SOCKET_PATH)}")
             await server.serve_forever()
 
     async def handle_client(
@@ -153,55 +202,25 @@ class Server:
 
         return listener.result
 
-    # def start(self, detach_process: bool | None = None):
-    #     if not os.path.exists(SERVER_HOME):
-    #         print(f"creating server home: {SERVER_HOME}")
-    #         os.makedirs(SERVER_HOME)
 
-    #     stdout_file = open(STDOUT_PATH, "w+")  # noqa: SIM115
-    #     stderr_file = open(STDERR_PATH, "w+")  # noqa: SIM115
-
-    #     print(f"daemonizing... (`tail -f {STDOUT_PATH[:-4]}.{{err,out}}` to view logs)")
-    #     with daemon.DaemonContext(
-    #         stdout=stdout_file,
-    #         stderr=stderr_file,
-    #         detach_process=detach_process,
-    #         pidfile=PIDFile(PID_PATH),
-    #     ):
-    #         if os.path.exists(SOCKET_PATH):
-    #             print(f"removing existing socket: {SOCKET_PATH}")
-    #             os.remove(SOCKET_PATH)
-
-    #         print(f"binding socket: {SOCKET_PATH}")
-    #         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
-    #             server.bind(SOCKET_PATH)
-    #             server.listen(1)
-
-    #             while True:
-    #                 try:
-    #                     conn, _ = server.accept()
-    #                     with conn:
-    #                         try:
-    #                             data = conn.recv(CONN_BUFFER_SIZE).decode()
-    #                             if not data:
-    #                                 continue
-    #                             print(f"solving: {data}")
-    #                             conn.sendall(self.solve(data).encode())
-    #                         except ConnectionError as e:
-    #                             print(f"connection error: {e}")
-    #                 except SystemExit as e:
-    #                     print(f"system exit: {e}")
-    #                     return e.code
-
-
-if __name__ == "__main__":
+def daemonize(config: Config):
+    stdout, _ = get_consoles()
+    stdout.print(server_usage)
 
     async def run_server():
-        server = Server(Config())
+        server = Server(config)
         await server.start()
 
     stdout_file = open(STDOUT_PATH, "w+")  # noqa: SIM115
     stderr_file = open(STDERR_PATH, "w+")  # noqa: SIM115
 
-    with daemon.DaemonContext(stdout=stdout_file, stderr=stderr_file):
+    with daemon.DaemonContext(
+        stdout=stdout_file,
+        stderr=stderr_file,
+        pidfile=PIDFile(PID_PATH),
+    ):
         asyncio.run(run_server())
+
+
+if __name__ == "__main__":
+    daemonize(Config())
