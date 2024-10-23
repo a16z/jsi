@@ -45,7 +45,7 @@ from jsi.core import (
     base_commands,
     set_input_output,
 )
-from jsi.utils import get_consoles, pid_exists, unexpand_home
+from jsi.utils import get_consoles, logger, pid_exists, unexpand_home
 
 SERVER_HOME = Path.home() / ".jsi" / "daemon"
 SOCKET_PATH = SERVER_HOME / "server.sock"
@@ -82,14 +82,15 @@ class ResultListener:
         self._result: str | None = None
 
     def exit_callback(self, command: Command, task: Task):
+        name, result, elapsed = command.name, command.result(), command.elapsed()
+        logger.info(f"{name} returned {result} in {elapsed:.03f}s")
+
         if self.event.is_set():
             return
 
         if command.done() and command.ok() and (stdout_text := command.stdout_text):
             self.event.set()
             self._result = f"{stdout_text.strip()}\n; (result from {command.name})"
-            name, result = command.name, command.result()
-            print(f"{name} returned {result} in {command.elapsed():.03f}s")
 
     @property
     def result(self) -> str:
@@ -106,17 +107,19 @@ class PIDFile:
         # by the time we enter the context manager
 
     def __enter__(self):
+        path_str = unexpand_home(self.path)
         try:
             with open(self.path) as fd:
-                print(f"pid file already exists: {self.path}")
+                logger.info(f"pid file already exists: {path_str}")
                 other_pid = fd.read()
 
-            if pid_exists(int(other_pid)):
-                print(f"killing existing daemon ({other_pid=})")
-                os.kill(int(other_pid), signal.SIGKILL)
+            other_pid_int = int(other_pid) if other_pid.isdigit() else None
+            if other_pid_int and pid_exists(other_pid_int):
+                logger.info(f"killing existing daemon (other_pid={other_pid_int})")
+                os.kill(other_pid_int, signal.SIGKILL)
 
             else:
-                print(f"pid file points to dead daemon ({other_pid=})")
+                logger.info(f"pid file points to dead daemon ({other_pid=})")
         except FileNotFoundError:
             # pid file doesn't exist, we're good to go
             pass
@@ -126,15 +129,19 @@ class PIDFile:
         with open(self.path, "w") as fd:
             fd.write(str(pid))
 
-        print(f"created pid file: {self.path} ({pid=})")
+        logger.info(f"created pid file: {path_str} ({pid=})")
         return self.path
 
     def __exit__(self, exc_type, exc_value, traceback):  # type: ignore
-        print(f"removing pid file: {self.path}")
+        logger.info(f"removing pid file: {self.path}")
 
         # ignore if the file was already removed
         with contextlib.suppress(FileNotFoundError):
             os.remove(self.path)
+
+
+def start_logger(command: Command, task: Task):
+    logger.info(f"command started: {command.parts()}")
 
 
 class Server:
@@ -153,7 +160,7 @@ class Server:
         )
 
         async with server:
-            print(f"server started on {unexpand_home(SOCKET_PATH)}")
+            logger.info(f"server listening on {unexpand_home(SOCKET_PATH)}")
             await server.serve_forever()
 
     async def handle_client(
@@ -167,7 +174,7 @@ class Server:
                 writer.write(result.encode())
                 await writer.drain()
         except Exception as e:
-            print(f"Error handling client: {e}")
+            logger.info(f"Error handling client: {e}")
         finally:
             writer.close()
             await writer.wait_closed()
@@ -186,8 +193,11 @@ class Server:
         self.config.input_file = file
         self.config.output_dir = os.path.dirname(file)
 
+        defs = self.solver_definitions
+        enabled_solvers = [solver for solver in defs if defs[solver].enabled]
+
         commands = base_commands(
-            self.config.sequence or list(self.available_solvers.keys()),
+            self.config.sequence or enabled_solvers,
             self.solver_definitions,
             self.available_solvers,
             self.config,
@@ -196,11 +206,16 @@ class Server:
 
         listener = ResultListener()
         controller = ProcessController(
-            task, commands, self.config, exit_callback=listener.exit_callback
+            task, commands, self.config,
+            start_callback=start_logger,
+            exit_callback=listener.exit_callback
         )
         controller.start()
 
-        return listener.result
+        result = listener.result
+        controller.kill()
+
+        return result
 
 
 def daemonize(config: Config):

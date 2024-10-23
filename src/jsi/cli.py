@@ -284,7 +284,8 @@ def main(args: list[str] | None = None) -> int:
 
     # build the commands to run the solvers
     # run the solvers in the specified sequence, or fallback to the default order
-    enabled_solvers = [s for s in solver_definitions if solver_definitions[s].enabled]
+    defs = solver_definitions
+    enabled_solvers = [solver for solver in defs if defs[solver].enabled]
 
     commands: list[Command] = base_commands(
         config.sequence or enabled_solvers,

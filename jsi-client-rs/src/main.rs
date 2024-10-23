@@ -36,7 +36,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 2 {
-        eprintln!("Usage: {} <command>", args[0]);
+        eprintln!("Usage: {} <path/to/file.smt2>", args[0]);
         process::exit(1);
     }
 

@@ -543,6 +543,7 @@ class ProcessController:
     task: Task
     commands: list[Command]
     config: Config
+    start_callback: Callable[[Command, Task], None] | None
     exit_callback: Callable[[Command, Task], None] | None
     _monitors: list[threading.Thread]
     _launchers: list[threading.Timer]
@@ -552,11 +553,13 @@ class ProcessController:
         task: Task,
         commands: list[Command],
         config: Config,
+        start_callback: Callable[[Command, Task], None] | None = None,
         exit_callback: Callable[[Command, Task], None] | None = None,
     ):
         self.task = task
         self.commands = commands
         self.config = config
+        self.start_callback = start_callback
         self.exit_callback = exit_callback
         self._monitors = []
         self._launchers = []
@@ -617,6 +620,9 @@ class ProcessController:
         monitor = threading.Thread(target=self._monitor_process, args=(command,))
         self._monitors.append(monitor)
         monitor.start()
+
+        if self.start_callback:
+            self.start_callback(command, task)
 
     def _monitor_process(self, command: Command):
         """Monitor the given process for completion, wait until configured timeout.

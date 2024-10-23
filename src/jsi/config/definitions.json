@@ -1,8 +1,9 @@
 {
     "bitwuzla": {
         "executable": "bitwuzla",
-        "model": "--produce-models",
-        "args": []
+        "model": null,
+        "args": ["--produce-models"],
+        "meta": "we enable models by default, needed to produce unsat cores 🤷‍♂️"
     },
     "boolector": {
         "executable": "boolector",
