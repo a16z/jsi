@@ -1,0 +1,15 @@
+{
+  "name": "halmos + solvers container",
+  "image": "ghcr.io/a16z/halmos:latest",
+  // "postCreateCommand": "some-command-if-needed",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-azuretools.vscode-docker"
+      ]
+    }
+  }
+  // "forwardPorts": [3000, 8080],
+  // "remoteUser": "your-user"
+}
