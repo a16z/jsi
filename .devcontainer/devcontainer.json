@@ -1,6 +1,6 @@
 {
   "name": "halmos + solvers container",
-  "image": "ghcr.io/a16z/halmos:latest",
+  "image": "ghcr.io/a16z/halmos:0.2.0",
   // "postCreateCommand": "some-command-if-needed",
   "customizations": {
     "vscode": {
