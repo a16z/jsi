@@ -5,8 +5,8 @@ import time
 from jsi.utils import LogLevel, get_console, kill_process, logger, pid_exists
 
 
-class Supervisor(multiprocessing.Process):
-    """Supervisor process that monitors the parent process and its children."""
+class Reaper(multiprocessing.Process):
+    """Reaper process that monitors the parent process and its children."""
 
     parent_pid: int
     child_pids: list[int]
@@ -22,7 +22,7 @@ class Supervisor(multiprocessing.Process):
         level = LogLevel.DEBUG if self.debug else LogLevel.INFO
         logger.enable(console=get_console(sys.stderr), level=level)
 
-        logger.info(f"supervisor started (PID: {self.pid})")
+        logger.info(f"reaper started (PID: {self.pid})")
         logger.info(f"watching parent (PID: {self.parent_pid})")
         logger.info(f"watching children (PID: {self.child_pids})")
 

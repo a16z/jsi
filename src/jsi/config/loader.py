@@ -24,7 +24,7 @@ class Config:
         debug: bool = False,
         input_file: str | None = None,
         output_dir: str | None = None,
-        supervisor: bool = False,
+        reaper: bool = False,
         sequence: Sequence[str] | None = None,
         model: bool = False,
         csv: bool = False,
@@ -36,7 +36,7 @@ class Config:
         self.debug = debug
         self.input_file = input_file
         self.output_dir = output_dir
-        self.supervisor = supervisor
+        self.reaper = reaper
         self.sequence = sequence
         self.model = model
         self.csv = csv
