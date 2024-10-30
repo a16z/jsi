@@ -356,7 +356,7 @@ def main(args: list[str] | None = None) -> int:
             # start a supervisor process in daemon mode so that it does not block
             # the program from exiting
             child_pids = [command.pid for command in controller.commands]
-            sv = Supervisor(os.getpid(), child_pids, config)
+            sv = Supervisor(os.getpid(), child_pids, config.debug)
             sv.daemon = True
             sv.start()
 

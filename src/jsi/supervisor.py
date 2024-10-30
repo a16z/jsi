@@ -1,8 +1,8 @@
 import multiprocessing
+import sys
 import time
 
-from jsi.core import Config
-from jsi.utils import LogLevel, kill_process, logger, pid_exists
+from jsi.utils import LogLevel, get_console, kill_process, logger, pid_exists
 
 
 class Supervisor(multiprocessing.Process):
@@ -10,21 +10,21 @@ class Supervisor(multiprocessing.Process):
 
     parent_pid: int
     child_pids: list[int]
-    config: Config
+    debug: bool
 
-    def __init__(self, parent_pid: int, child_pids: list[int], config: Config):
+    def __init__(self, parent_pid: int, child_pids: list[int], debug: bool = False):
         super().__init__()
         self.parent_pid = parent_pid
         self.child_pids = child_pids
-        self.config = config
+        self.debug = debug
 
     def run(self):
-        if self.config.debug:
-            logger.enable(console=self.config.stderr, level=LogLevel.DEBUG)
+        level = LogLevel.DEBUG if self.debug else LogLevel.INFO
+        logger.enable(console=get_console(sys.stderr), level=level)
 
-        logger.debug(f"supervisor started (PID: {self.pid})")
-        logger.debug(f"watching parent (PID: {self.parent_pid})")
-        logger.debug(f"watching children (PID: {self.child_pids})")
+        logger.info(f"supervisor started (PID: {self.pid})")
+        logger.info(f"watching parent (PID: {self.parent_pid})")
+        logger.info(f"watching children (PID: {self.child_pids})")
 
         last_message_time = time.time()
         try:
