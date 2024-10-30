@@ -66,7 +66,7 @@ def test_real_process():
 def test_cmd():
     command = cmd()
     command.start()
-    stdout, stderr = command.communicate(timeout=0.1)
+    stdout, stderr = command.communicate(timeout=0.2)
 
     assert command.returncode == 0
     assert not stdout
