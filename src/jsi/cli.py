@@ -53,6 +53,7 @@ import os
 import signal
 import sys
 import threading
+import time
 from functools import partial
 
 from jsi.config.loader import Config, find_available_solvers, load_definitions
@@ -132,6 +133,38 @@ def setup_signal_handlers(controller: ProcessController):
 
     # also register the cleanup function to be called on exit
     atexit.register(cleanup)
+
+
+def monitor_parent():
+    """
+    Monitor the parent process and exit if it dies or changes.
+
+    Caveats:
+    - only works on POSIX systems
+    - only works if called early enough (before the original parent process exits)
+    """
+
+    parent_pid = os.getppid()
+
+    def check_parent():
+        while True:
+            try:
+                current_ppid = os.getppid()
+
+                # if parent PID changed (original parent died), we exit
+                if current_ppid != parent_pid or current_ppid == 1:
+                    stderr.print("parent process died, exiting...")
+                    os.kill(os.getpid(), signal.SIGTERM)
+                    break
+                time.sleep(1)  # check every second
+            except ProcessLookupError:
+                # if we can't check parent PID, assume parent died
+                os.kill(os.getpid(), signal.SIGTERM)
+                break
+
+    # Start monitoring in background thread
+    monitor_thread = threading.Thread(target=check_parent, daemon=True)
+    monitor_thread.start()
 
 
 class BadParameterError(Exception):
@@ -228,6 +261,9 @@ def parse_args(args: list[str]) -> Config:
 def main(args: list[str] | None = None) -> int:
     global stdout
     global stderr
+
+    # kick off the parent monitor in the background as early as possible
+    monitor_parent()
 
     if args is None:
         args = sys.argv[1:]
