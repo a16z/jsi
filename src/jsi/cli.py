@@ -28,7 +28,7 @@ Common options:
 
 Less common options:
   --output DIRECTORY  directory where solver output files will be written
-  --supervisor        run a supervisor process to avoid orphaned subprocesses
+  --reaper            run a reaper process that kills orphaned solvers when jsi exits
   --debug             enable debug logging
   --csv               print solver results in CSV format (<output>/<input>.csv)
   --perf              print performance timers
@@ -53,6 +53,7 @@ import os
 import signal
 import sys
 import threading
+import time
 from functools import partial
 
 from jsi.config.loader import Config, find_available_solvers, load_definitions
@@ -134,6 +135,38 @@ def setup_signal_handlers(controller: ProcessController):
     atexit.register(cleanup)
 
 
+def monitor_parent():
+    """
+    Monitor the parent process and exit if it dies or changes.
+
+    Caveats:
+    - only works on POSIX systems
+    - only works if called early enough (before the original parent process exits)
+    """
+
+    parent_pid = os.getppid()
+
+    def check_parent():
+        while True:
+            try:
+                current_ppid = os.getppid()
+
+                # if parent PID changed (original parent died), we exit
+                if current_ppid != parent_pid or current_ppid == 1:
+                    stderr.print("parent process died, exiting...")
+                    os.kill(os.getpid(), signal.SIGTERM)
+                    break
+                time.sleep(1)  # check every second
+            except ProcessLookupError:
+                # if we can't check parent PID, assume parent died
+                os.kill(os.getpid(), signal.SIGTERM)
+                break
+
+    # Start monitoring in background thread
+    monitor_thread = threading.Thread(target=check_parent, daemon=True)
+    monitor_thread.start()
+
+
 class BadParameterError(Exception):
     pass
 
@@ -174,8 +207,8 @@ def parse_args(args: list[str]) -> Config:
                 config.model = True
             case "--csv":
                 config.csv = True
-            case "--supervisor":
-                config.supervisor = True
+            case "--reaper":
+                config.reaper = True
             case "--daemon":
                 config.daemon = True
             case "--timeout":
@@ -228,6 +261,9 @@ def parse_args(args: list[str]) -> Config:
 def main(args: list[str] | None = None) -> int:
     global stdout
     global stderr
+
+    # kick off the parent monitor in the background as early as possible
+    monitor_parent()
 
     if args is None:
         args = sys.argv[1:]
@@ -310,8 +346,8 @@ def main(args: list[str] | None = None) -> int:
         controller.start()
         status.start()
 
-        if config.supervisor:
-            from jsi.supervisor import Supervisor
+        if config.reaper:
+            from jsi.reaper import Reaper
 
             # wait for the subprocesses to start, we need the PIDs for the supervisor
             while controller.task.status.value < TaskStatus.RUNNING.value:
@@ -320,9 +356,9 @@ def main(args: list[str] | None = None) -> int:
             # start a supervisor process in daemon mode so that it does not block
             # the program from exiting
             child_pids = [command.pid for command in controller.commands]
-            sv = Supervisor(os.getpid(), child_pids, config)
-            sv.daemon = True
-            sv.start()
+            reaper = Reaper(os.getpid(), child_pids, config.debug)
+            reaper.daemon = True
+            reaper.start()
 
         # wait for the solvers to finish
         controller.join()

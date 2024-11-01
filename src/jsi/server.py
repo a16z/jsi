@@ -206,9 +206,11 @@ class Server:
 
         listener = ResultListener()
         controller = ProcessController(
-            task, commands, self.config,
+            task,
+            commands,
+            self.config,
             start_callback=start_logger,
-            exit_callback=listener.exit_callback
+            exit_callback=listener.exit_callback,
         )
         controller.start()
 
