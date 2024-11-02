@@ -30,6 +30,7 @@ Less common options:
   --output DIRECTORY  directory where solver output files will be written
   --reaper            run a reaper process that kills orphaned solvers when jsi exits
   --debug             enable debug logging
+  --verbose           enable verbose output
   --csv               print solver results in CSV format (<output>/<input>.csv)
   --perf              print performance timers
 
@@ -199,6 +200,8 @@ def parse_args(args: list[str]) -> Config:
                 logger.enable(console=stderr, level=LogLevel.TRACE)
             case "--debug":
                 config.debug = True
+            case "--verbose":
+                config.verbose = True
             case "--full-run":
                 config.early_exit = False
             case "--output":
@@ -338,8 +341,10 @@ def main(args: list[str] | None = None) -> int:
 
     setup_signal_handlers(controller)
 
-    stderr.print(f"starting {len(commands)} solvers")
-    stderr.print(f"output will be written to: {config.output_dir}{os.sep}")
+    if config.verbose:
+        stderr.print(f"starting {len(commands)} solvers")
+        stderr.print(f"output will be written to: {config.output_dir}{os.sep}")
+
     status = get_status()
     try:
         # all systems go

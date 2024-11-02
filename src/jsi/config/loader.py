@@ -29,6 +29,7 @@ class Config:
         model: bool = False,
         csv: bool = False,
         daemon: bool = False,
+        verbose: bool = False,
     ):
         self.early_exit = early_exit
         self.timeout_seconds = timeout_seconds
@@ -41,6 +42,7 @@ class Config:
         self.model = model
         self.csv = csv
         self.daemon = daemon
+        self.verbose = verbose
         self.stdout = simple_stdout
         self.stderr = simple_stderr
 
@@ -103,8 +105,10 @@ def load_definitions(config: Config) -> dict[str, SolverDefinition]:
             return parse_definitions(json.load(f))
 
     default_path = config.definitions_default_path
-    stderr.print(f"no custom definitions file found ('{custom_path}')")
-    stderr.print(f"loading defaults ('{default_path}')")
+
+    if config.verbose:
+        stderr.print(f"no custom definitions file found ('{custom_path}')")
+        stderr.print(f"loading defaults ('{default_path}')")
 
     data = default_path.read_text()
     return parse_definitions(json.loads(data))
@@ -118,7 +122,9 @@ def find_available_solvers(
 
     solver_paths = config.solver_paths
     if os.path.exists(solver_paths):
-        stderr.print(f"loading solver paths from cache ('{solver_paths}')")
+        if config.verbose:
+            stderr.print(f"loading solver paths from cache ('{solver_paths}')")
+
         import json
 
         with open(solver_paths) as f:
@@ -131,7 +137,9 @@ def find_available_solvers(
         if paths:
             return paths
 
-    stderr.print("looking for solvers available on PATH:")
+    if config.verbose:
+        stderr.print("looking for solvers available on PATH:")
+
     paths: dict[str, str] = {}
 
     import shutil
@@ -146,7 +154,8 @@ def find_available_solvers(
         paths[solver_name] = path
         stderr.print(f"{solver_name:>12} [green]OK[/green]")
 
-    stderr.print()
+    if config.verbose:
+        stderr.print()
 
     # save the paths to the solver_paths file
     if paths:
