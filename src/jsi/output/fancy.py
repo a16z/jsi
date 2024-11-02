@@ -30,16 +30,16 @@ def styled_size(size: int) -> Text:
 
 
 def styled_output(command: Command) -> Text:
-    return Text(file_loc(command.stdout), style="magenta")
+    return Text(file_loc(command.stdout), style="bright_magenta")
 
 
 def get_results_table(controller: ProcessController) -> Table:
     table = Table(title="Results")
     table.add_column("solver", style="cyan")
     table.add_column("result")
-    table.add_column("exit", style="magenta", justify="right")
+    table.add_column("exit", style="bright_magenta", justify="right")
     table.add_column("time", justify="right", style="yellow")
-    table.add_column("output file", justify="left", style="magenta", overflow="fold")
+    table.add_column("output file", style="bright_magenta", overflow="fold")
     table.add_column("size", justify="right")
 
     commands = controller.commands
