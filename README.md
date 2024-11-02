@@ -1,8 +1,24 @@
 # jsi
 
-just solve it - a CLI utility to run a portfolio of [SMT](https://en.wikipedia.org/wiki/Satisfiability_modulo_theories) solvers in parallel.
+just solve it - a command-line utility to run a portfolio of [SMT](https://en.wikipedia.org/wiki/Satisfiability_modulo_theories) solvers in parallel.
+
+![Screenshot of jsi running on an unsat division problem](static/images/unsat-div-screenshot.png)
+
+
+## Highlights
+
+- 🏆 acts as a "virtual best solver" by running multiple solvers in parallel and returning the result of the fastest solver
+- 🔍 discovers available solvers on on the PATH at runtime
+- 🛣️ runs solvers in parallel and monitors their progress
+- ⏰ can terminate solvers early after a timeout
+- 🔪 jsi can be interrupted by Ctrl-C and it will kill any solvers still running
+- 🏎 runs with minimal startup time (<100ms), and also supports an experimental daemon mode with a rust client for extra low-latency (<10ms)
+- 🖥️ supports macOS and Linux
+
 
 ## Getting Started
+
+We recommend using [uv](https://docs.astral.sh/uv/) to install jsi.
 
 ```sh
 # install jsi
@@ -41,6 +57,8 @@ uv run pytest -v -k <test_name>
 ### Redirect log output
 
 ```sh
+# jsi will print its own output to stderr, so you can redirect it to a file
+# (stdout is reserved for the best solver's output)
 jsi 2> jsi.logs
 ```
 
