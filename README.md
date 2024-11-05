@@ -1,6 +1,6 @@
 # jsi
 
-just solve it - a command-line utility to run a portfolio of [SMT](https://en.wikipedia.org/wiki/Satisfiability_modulo_theories) solvers in parallel.
+just solve it - a command-line utility to run a portfolio of [SMT](https://en.wikipedia.org/wiki/Satisfiability_modulo_theories) solvers in parallel
 
 ![Screenshot of jsi running on an unsat division problem](static/images/unsat-div-screenshot.png)
 
@@ -34,7 +34,7 @@ jsi --help
 ## Features
 
 <details>
-<summary>### 🧰 Configuration</summary>
+<summary>🧰 Configuration</summary>
 
 This is how jsi finds and runs solvers:
 
@@ -53,24 +53,30 @@ It does this because scanning the PATH can be slow, but loading cached paths is 
 > `~/.jsi/cache.json` can always be safely deleted, jsi will generate it again next time it runs. If you make changes to `~/.jsi/solvers.json` (like adding a new solver), you should delete the cache file, otherwise jsi won't pick up the new solver.
 </details>
 
-### 🎨 Rich Output
+
+<details>
+<summary>🎨 Rich Output</summary>
 
 jsi uses [rich](https://rich.readthedocs.io/en/stable/) to render nice colored output. However importing rich at startup adds about 30-40ms to jsi's startup time, so by default jsi only uses rich if it detects that its output is a tty.
 
 > [!TIP]
 > if you want to minimize jsi's startup time, you can force it to use basic output by redirecting its stderr to a file: `jsi ... 2> jsi.err`
+</details>
 
 
-### 📋 Run a specific sequence of solvers
+<details>
+<summary>📋 Run a specific sequence of solvers</summary>
 
 Sometimes it can be useful to run only a subset of available solvers, for instance when you already know the top 2-3 solvers for a given problem.
 
 jsi supports a `--sequence` option that allows you to specify a sequence of solvers to run as a comma-separated list of solver names (as defined in your `~/.jsi/solvers.json` file).
 
 ![Screenshot of jsi running a sequence of solvers](static/images/jsi-sequence-screenshot.png)
+</details>
 
 
-### 📊 CSV Output
+<details>
+<summary>📊 CSV Output</summary>
 
 In addition to the table output, jsi can also output results in CSV format, which is useful for further processing like generating graphs or importing into spreadsheets (especially in conjunction with the `--full-run` option).
 
@@ -102,9 +108,21 @@ $ bat examples/unsat-div.smt2.csv
    3   │ cvc4,unsat,0,9.75s,examples/unsat-div.smt2.cvc4.out,6
    4   │ cvc5,unsat,0,13.01s,examples/unsat-div.smt2.cvc5.out,6
 ```
+</details>
 
 
-### 🧪 Experimental Daemon Mode
+<details>
+<summary>🔪 Reaper mode</summary>
+
+jsi makes a best effort to be resilient about crashes and avoid orphaned solver processes. In particular:
+- it spawns a reaper thread that checks if the jsi's parent process is still running, and if not, it will kill all solver subprocesses
+- it handles keyboard interrupts and SIGTERM
+- it can optionally spawn a reaper subprocess that monitors jsi's pid, and if it notices that jsi has died, it will kill any solver subprocesses
+</details>
+
+
+<details>
+<summary>🧪 Experimental Daemon Mode</summary>
 
 jsi can also run in daemon mode, where it will start a subprocess to handle requests. This mode is experimental and subject to change.
 
@@ -170,6 +188,7 @@ Summary
 
 > [!WARNING]
 > the daemon mode is experimental and subject to change
+</details>
 
 
 ## Acknowledgements
