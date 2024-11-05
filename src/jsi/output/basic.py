@@ -40,7 +40,11 @@ class NoopStatus:
         pass
 
 
-def on_process_exit(command: Command, task: Task):
+def on_proc_start(command: Command, task: Task):
+    pass
+
+
+def on_proc_exit(command: Command, task: Task):
     if task.status > TaskStatus.RUNNING:
         return
 

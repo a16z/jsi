@@ -210,18 +210,6 @@ class Command:
 
         return self._process.wait(timeout)
 
-    def add_exit_callback(
-        self, callback: Callable[[Command], None]
-    ) -> threading.Thread:
-        def monitor():
-            self.wait()
-            callback(self)
-
-        thread = threading.Thread(target=monitor)
-        thread.daemon = True
-        thread.start()
-        return thread
-
     def bin_name(self):
         return self.name
 
@@ -632,16 +620,17 @@ class ProcessController:
         :param command:
             The process to monitor.
         """
-        exit_thread = command.add_exit_callback(self._on_process_finished)
 
         try:
             command.wait(timeout=(self.config.timeout_seconds or None))
+            if not command.done():
+                raise RuntimeError(f"{command.bin_name()} not done after wait")
         except TimeoutExpired:
             logger.debug(f"timeout expired for {command.bin_name()}")
             command.has_timed_out = True
             self._kill_process(command)
         finally:
-            exit_thread.join()
+            self._on_proc_finished(command)
 
     def join(self):
         if self.task.status == TaskStatus.NOT_STARTED:
@@ -738,7 +727,7 @@ class ProcessController:
             logger.debug(f"{command!r} still running after {grace_period_seconds}s")
             command.kill()
 
-    def _on_process_finished(self, command: Command):
+    def _on_proc_finished(self, command: Command):
         # Update the end_time in command
         command.end_time = time.time()
 

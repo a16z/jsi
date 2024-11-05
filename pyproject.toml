@@ -41,7 +41,7 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = [
-	"A",  # warn about shadowing built-ins
+    "A",  # warn about shadowing built-ins
     "E",  # pycodestyle
     "F",  # pyflakes
     "UP", # pyupgrade

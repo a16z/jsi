@@ -57,8 +57,9 @@ def get_console(file: object) -> Printable:
             return SimpleConsole(file=file)
 
 
+# always return a simple console for stdout, and optionally a rich console for stderr
 def get_consoles() -> tuple[Printable, Printable]:
-    return (get_console(sys.stdout), get_console(sys.stderr))
+    return (simple_stdout, get_console(sys.stderr))
 
 
 class LogLevel(Enum):

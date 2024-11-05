@@ -79,15 +79,21 @@ from jsi.utils import (
 stdout, stderr = simple_stdout, simple_stderr
 
 
-def get_exit_callback():
+def get_process_callbacks():
+    """
+    Return a tuple of two callbacks (process start and process exit)
+    from the appropriate output module.
+    """
+
     if is_terminal(sys.stderr):
-        from jsi.output.fancy import on_process_exit, status
+        from jsi.output.fancy import on_proc_exit, on_proc_start, status
 
-        return partial(on_process_exit, status=status)
+        return tuple(partial(f, status=status) for f in (on_proc_start, on_proc_exit))
+
     else:
-        from jsi.output.basic import on_process_exit
+        from jsi.output.basic import on_proc_exit, on_proc_start
 
-        return on_process_exit
+        return (on_proc_start, on_proc_exit)
 
 
 def get_status():
@@ -335,7 +341,14 @@ def main(args: list[str] | None = None) -> int:
 
     # initialize the controller
     task = Task(name=str(config.input_file))
-    controller = ProcessController(task, commands, config, get_exit_callback())
+    start_callback, exit_callback = get_process_callbacks()
+    controller = ProcessController(
+        task,
+        commands,
+        config,
+        start_callback=start_callback,
+        exit_callback=exit_callback,
+    )
 
     setup_signal_handlers(controller)
 

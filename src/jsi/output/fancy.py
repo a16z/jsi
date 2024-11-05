@@ -56,7 +56,7 @@ def get_results_table(controller: ProcessController) -> Table:
     return table
 
 
-def on_process_exit(command: Command, task: Task, status: Status):
+def log_process_exit(command: Command, task: Task, status: Status):
     if task.status > TaskStatus.RUNNING:
         return
 
@@ -74,9 +74,19 @@ def on_process_exit(command: Command, task: Task, status: Status):
     )
     stderr.print(message)
 
-    # FIXME: we can undercount here if a solver finishes but others have not started yet
+def update_status(task: Task, status: Status):
     not_done = sum(1 for proc in task.processes if not proc.done())
-    status.update(f"{not_done} solvers still running (Ctrl-C to stop)")
+    solver_str = "solver" if not_done == 1 else "solvers"
+    status.update(f"{not_done} {solver_str} still running (Ctrl-C to stop)")
+
+
+def on_proc_start(command: Command, task: Task, status: Status):
+    update_status(task, status)
+
+
+def on_proc_exit(command: Command, task: Task, status: Status):
+    log_process_exit(command, task, status)
+    update_status(task, status)
 
 
 _status_message = "waiting for solvers (press ^C to stop)"
