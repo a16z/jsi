@@ -14,6 +14,7 @@ just solve it - a command-line utility to run a portfolio of [SMT](https://en.wi
 - 🔪 jsi can be interrupted by Ctrl-C and it will kill any solvers still running
 - 🏎 runs with minimal startup time (<100ms), and also supports an experimental daemon mode with a rust client for extra low-latency (<10ms)
 - 🖥️ supports macOS and Linux
+- 🐍 supports Python 3.11+
 
 
 ## Getting Started
@@ -50,6 +51,31 @@ It does this because scanning the PATH can be slow, but loading cached paths is 
 > `~/.jsi/cache.json` can always be safely deleted, jsi will generate it again next time it runs. If you make changes to `~/.jsi/solvers.json` (like adding a new solver), you should delete the cache file, otherwise jsi won't pick up the new solver.
 
 
+### Rich Output
+
+jsi uses [rich](https://rich.readthedocs.io/en/stable/) to render nice colored output. However importing rich at startup adds about 30-40ms to jsi's startup time, so by default jsi only uses rich if it detects that its output is a tty.
+
+> [!TIP]
+> if you want to minimize jsi's startup time, you can force it to use basic output by redirecting its stderr to a file: `jsi ... 2> jsi.out`
+
+
+### Run a specific sequence of solvers
+
+Sometimes it can be useful to run only a subset of available solvers, for instance when you already know the top 2-3 solvers for a given problem.
+
+jsi supports a `--sequence` option that allows you to specify a sequence of solvers to run as a comma-separated list of solver names (as defined in your `~/.jsi/solvers.json` file).
+
+![Screenshot of jsi running a sequence of solvers](static/images/sequence-screenshot.png)
+
+
+
+TODO:
+
+- [ ] csv output
+- [ ] daemon mode
+- [ ] rust client
+
+
 ## Development
 
 Pre-requisites: install [rye](https://rye.astral.sh/guide/installation/#installing-rye)
@@ -83,9 +109,36 @@ uv run pytest -v -k <test_name>
 jsi 2> jsi.logs
 ```
 
+
+### Profiling imports
+
+```sh
+# this will print import times to stderr
+python -Ximporttime -m jsi ... 2> stderr.log
+
+# this parses the log and displays a nice visual summary
+uvx tuna stderr.log
+```
+
+
+### Benchmarking
+
+I recommend using [hyperfine](https://github.com/sharkdp/hyperfine) to benchmark jsi.
+
+For instance, to verify that redirecting stderr improves startup time, you can do:
+
+```sh
+# this only runs the "always-sat" virtual solver to evaluate jsi's overhead
+hyperfine --warmup 3 --shell=none 'python -m jsi examples/easy-sat.smt2 --sequence always-sat'
+```
+
+![Screenshot of hyperfine benchmark](static/images/hyperfine-screenshot.png)
+
+
 ## Acknowledgements
 
 The setup for this project is based on [postmodern-python](https://rdrn.me/postmodern-python/).
+
 
 ## Disclaimer
 
