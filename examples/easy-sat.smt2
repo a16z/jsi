@@ -6,5 +6,4 @@
 (assert (bvult z x))
 (assert (bvult z y))
 (check-sat)
-(get-model)
 (exit)

@@ -102,67 +102,72 @@ $ bat examples/unsat-div.smt2.csv
 ```
 
 
-TODO:
+### 🧪 Experimental Daemon Mode
 
-- [ ] daemon mode
-- [ ] rust client
-
-
-## Development
-
-Pre-requisites: install [rye](https://rye.astral.sh/guide/installation/#installing-rye)
+jsi can also run in daemon mode, where it will start a subprocess to handle requests. This mode is experimental and subject to change.
 
 ```sh
-# clone the repo
-git clone https://github.com/a16z/jsi
-cd jsi
+# start the daemon with
+jsi --daemon
 
-# install dependencies
-rye sync
+# or
+python -m jsi.server
 
-# runs the formatter, linter, type checker and tests
-rye run all
-
-# run the tool
-rye run jsi --help
-
-# run it without rye
-python -m jsi --help
-
-# run a single test
-uv run pytest -v -k <test_name>
+# tail server logs with
+tail -f ~/.jsi/daemon/server.{err,out}
 ```
 
-### Redirect log output
+The daemon will listen for requests on a unix socket, and each request should be a single line containing the path to an smt2 file to solve.
+
+You can then send requests to the daemon:
 
 ```sh
-# jsi will print its own output to stderr, so you can redirect it to a file
-# (stdout is reserved for the best solver's output)
-jsi 2> jsi.logs
+# directly with nc
+$ echo -n ~/projects/jsi/examples/easy-sat.smt2 | nc -U ~/.jsi/daemon/server.sock
+sat
+; (result from yices)
+
+# with the included Python client
+$ python -m jsi.client ~/projects/jsi/examples/easy-sat.smt2
+sat
+; (result from yices)
 ```
 
-
-### Profiling imports
+or for the lowest latency, use the included Rust client:
 
 ```sh
-# this will print import times to stderr
-python -Ximporttime -m jsi ... 2> stderr.log
+# build it
+(cd jsi-client-rs && cargo build --release)
 
-# this parses the log and displays a nice visual summary
-uvx tuna stderr.log
+# install it
+(cd jsi-client-rs && ln -s $(pwd)/target/release/jsif /usr/local/bin/jsif)
+
+# use it
+jsif ~/projects/jsi/examples/easy-sat.smt2
 ```
 
-
-### Benchmarking
-
-I recommend using [hyperfine](https://github.com/sharkdp/hyperfine) to benchmark jsi.
+This benchmark shows why you might want to use the Rust client:
 
 ```sh
-# this only runs the "always-sat" virtual solver to evaluate jsi's overhead
-hyperfine --warmup 3 --shell=none 'python -m jsi examples/easy-sat.smt2 --sequence always-sat'
+hyperfine --shell=none \
+  "python -m jsi.client examples/easy-sat.smt2" \
+  "jsif examples/easy-sat.smt2"
+
+Benchmark 1: python -m jsi.client examples/easy-sat.smt2
+  Time (mean ± σ):     290.9 ms ±   9.1 ms    [User: 75.7 ms, System: 18.9 ms]
+  Range (min … max):   282.3 ms … 313.5 ms    10 runs
+
+Benchmark 2: jsif examples/easy-sat.smt2
+  Time (mean ± σ):     196.7 ms ±   4.3 ms    [User: 1.2 ms, System: 2.3 ms]
+  Range (min … max):   190.9 ms … 207.2 ms    15 runs
+
+Summary
+  jsif examples/easy-sat.smt2 ran
+    1.48 ± 0.06 times faster than python -m jsi.client examples/easy-sat.smt2
 ```
 
-![Screenshot of hyperfine benchmark](static/images/hyperfine-screenshot.png)
+> [!WARNING]
+> the daemon mode is experimental and subject to change
 
 
 ## Acknowledgements

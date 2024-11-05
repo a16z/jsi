@@ -1,5 +1,6 @@
 # client.py
 
+import os
 import socket
 import sys
 
@@ -23,4 +24,4 @@ if __name__ == "__main__":
         sys.exit(1)
 
     command = " ".join(sys.argv[1:])
-    send_command(command)
+    send_command(os.path.abspath(command))

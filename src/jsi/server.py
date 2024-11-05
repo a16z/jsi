@@ -27,6 +27,7 @@ import asyncio
 import contextlib
 import os
 import signal
+import sys
 import threading
 from pathlib import Path
 
@@ -45,7 +46,7 @@ from jsi.core import (
     base_commands,
     set_input_output,
 )
-from jsi.utils import get_consoles, logger, pid_exists, unexpand_home
+from jsi.utils import get_console, logger, pid_exists, unexpand_home
 
 SERVER_HOME = Path.home() / ".jsi" / "daemon"
 SOCKET_PATH = SERVER_HOME / "server.sock"
@@ -170,6 +171,7 @@ class Server:
             data: bytes = await reader.read(1024)
             if data:
                 message: str = data.decode()
+                print(f"received request: {message}")
                 result = await self.solve(message)
                 writer.write(result.encode())
                 await writer.drain()
@@ -221,7 +223,7 @@ class Server:
 
 
 def daemonize(config: Config):
-    stdout, _ = get_consoles()
+    stdout = get_console(sys.stdout)
     stdout.print(server_usage)
 
     async def run_server():

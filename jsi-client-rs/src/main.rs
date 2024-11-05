@@ -41,8 +41,15 @@ fn main() {
     }
 
     let command = args[1..].join(" ");
+    let abspath = match PathBuf::from(&command).canonicalize() {
+        Ok(path) => path,
+        Err(_) => {
+            eprintln!("Error: file not found: {}", command);
+            process::exit(1);
+        }
+    };
 
-    match send_command(&command) {
+    match send_command(abspath.to_str().unwrap()) {
         Ok(_) => (),
         Err(e) => eprintln!("Error: {}", e),
     }
