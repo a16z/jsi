@@ -47,10 +47,9 @@ Then:
 - it looks up the solver cache in `~/.jsi/cache.json`
 - if that file doesn't exist, it will scan the PATH and cache the results
 
-It does this because scanning the PATH can be slow, but loading cached paths is 5x faster.
+It does this because loading cached paths is 4-5x faster than scanning the PATH.
 
-> [!TIP]
-> `~/.jsi/cache.json` can always be safely deleted, jsi will generate it again next time it runs. If you make changes to `~/.jsi/solvers.json` (like adding a new solver), you should delete the cache file, otherwise jsi won't pick up the new solver.
+💡 Tip: `~/.jsi/cache.json` can always be safely deleted, jsi will generate it again next time it runs. If you make changes to `~/.jsi/solvers.json` (like adding a new solver), you should delete the cache file, otherwise jsi won't pick up the new solver.
 </details>
 
 
@@ -59,8 +58,7 @@ It does this because scanning the PATH can be slow, but loading cached paths is 
 
 jsi uses [rich](https://rich.readthedocs.io/en/stable/) to render nice colored output. However importing rich at startup adds about 30-40ms to jsi's startup time, so by default jsi only uses rich if it detects that its output is a tty.
 
-> [!TIP]
-> if you want to minimize jsi's startup time, you can force it to use basic output by redirecting its stderr to a file: `jsi ... 2> jsi.err`
+If you want to minimize jsi's startup time, you can force it to use basic output by redirecting its stderr to a file: `jsi ... 2> jsi.err`
 </details>
 
 
@@ -186,9 +184,13 @@ Summary
     1.48 ± 0.06 times faster than python -m jsi.client examples/easy-sat.smt2
 ```
 
-> [!WARNING]
-> the daemon mode is experimental and subject to change
+⚠️ **Warning**: the daemon mode is experimental and subject to change. Not all options are supported at this time (like `--sequence`, `--csv`, `--timeout`, etc).
 </details>
+
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md)
 
 
 ## Acknowledgements
