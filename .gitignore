@@ -177,4 +177,6 @@ Cargo.lock
 **/*.rs.bk
 
 # log files
-**/*.{err,out,csv}
+**/*.err
+**/*.out
+**/*.csv
