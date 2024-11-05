@@ -32,7 +32,7 @@ jsi --help
 
 ## Features
 
-### Configuration
+### 🧰 Configuration
 
 This is how jsi finds and runs solvers:
 
@@ -51,7 +51,7 @@ It does this because scanning the PATH can be slow, but loading cached paths is 
 > `~/.jsi/cache.json` can always be safely deleted, jsi will generate it again next time it runs. If you make changes to `~/.jsi/solvers.json` (like adding a new solver), you should delete the cache file, otherwise jsi won't pick up the new solver.
 
 
-### Rich Output
+### 🎨 Rich Output
 
 jsi uses [rich](https://rich.readthedocs.io/en/stable/) to render nice colored output. However importing rich at startup adds about 30-40ms to jsi's startup time, so by default jsi only uses rich if it detects that its output is a tty.
 
@@ -59,7 +59,7 @@ jsi uses [rich](https://rich.readthedocs.io/en/stable/) to render nice colored o
 > if you want to minimize jsi's startup time, you can force it to use basic output by redirecting its stderr to a file: `jsi ... 2> jsi.out`
 
 
-### Run a specific sequence of solvers
+### 📋 Run a specific sequence of solvers
 
 Sometimes it can be useful to run only a subset of available solvers, for instance when you already know the top 2-3 solvers for a given problem.
 
@@ -68,10 +68,42 @@ jsi supports a `--sequence` option that allows you to specify a sequence of solv
 ![Screenshot of jsi running a sequence of solvers](static/images/sequence-screenshot.png)
 
 
+### 📊 CSV Output
+
+In addition to the table output, jsi can also output results in CSV format, which is useful for further processing like generating graphs or importing into spreadsheets (especially in conjunction with the `--full-run` option).
+
+```sh
+$ jsi --full-run --sequence stp,cvc4,cvc5 --csv examples/unsat-div.smt2
+stp returned unsat
+cvc4 returned unsat
+cvc5 returned unsat
+unsat
+; (result from stp)
+
+                                   Results
+┏━━━━━━━━┳━━━━━━━━┳━━━━━━┳━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━┓
+┃ solver ┃ result ┃ exit ┃   time ┃ output file                      ┃ size ┃
+┡━━━━━━━━╇━━━━━━━━╇━━━━━━╇━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━┩
+│ stp    │ unsat  │    0 │  0.01s │ examples/unsat-div.smt2.stp.out  │ 6.0B │
+│ cvc4   │ unsat  │    0 │  9.75s │ examples/unsat-div.smt2.cvc4.out │ 6.0B │
+│ cvc5   │ unsat  │    0 │ 13.01s │ examples/unsat-div.smt2.cvc5.out │ 6.0B │
+└────────┴────────┴──────┴────────┴──────────────────────────────────┴──────┘
+writing results to: examples/unsat-div.smt2.csv
+
+$ bat examples/unsat-div.smt2.csv
+
+───────┬─────────────────────────────────────────────────────────────────────
+       │ File: examples/unsat-div.smt2.csv
+───────┼─────────────────────────────────────────────────────────────────────
+   1   │ solver,result,exit,time,output file,size
+   2   │ stp,unsat,0,0.01s,examples/unsat-div.smt2.stp.out,6
+   3   │ cvc4,unsat,0,9.75s,examples/unsat-div.smt2.cvc4.out,6
+   4   │ cvc5,unsat,0,13.01s,examples/unsat-div.smt2.cvc5.out,6
+```
+
 
 TODO:
 
-- [ ] csv output
 - [ ] daemon mode
 - [ ] rust client
 
@@ -124,8 +156,6 @@ uvx tuna stderr.log
 ### Benchmarking
 
 I recommend using [hyperfine](https://github.com/sharkdp/hyperfine) to benchmark jsi.
-
-For instance, to verify that redirecting stderr improves startup time, you can do:
 
 ```sh
 # this only runs the "always-sat" virtual solver to evaluate jsi's overhead
