@@ -29,6 +29,27 @@ jsi --help
 ```
 
 
+## Features
+
+### Configuration
+
+This is how jsi finds and runs solvers:
+
+- it first attempts to load custom solver definitions from `~/.jsi/solvers.json`
+- if that file doesn't exist, it loads the default definitions from the installed package (see [src/jsi/config/solvers.json](src/jsi/config/solvers.json))
+
+Based on these definitions, jsi knows what executables to look for, whether a given solver is enabled, how to enable model generation, etc.
+
+Then:
+- it looks up the solver cache in `~/.jsi/cache.json`
+- if that file doesn't exist, it will scan the PATH and cache the results
+
+It does this because scanning the PATH can be slow, but loading cached paths is 5x faster.
+
+> [!TIP]
+> `~/.jsi/cache.json` can always be safely deleted, jsi will generate it again next time it runs. If you make changes to `~/.jsi/solvers.json` (like adding a new solver), you should delete the cache file, otherwise jsi won't pick up the new solver.
+
+
 ## Development
 
 Pre-requisites: install [rye](https://rye.astral.sh/guide/installation/#installing-rye)

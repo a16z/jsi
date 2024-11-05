@@ -77,8 +77,6 @@ from jsi.utils import (
 )
 
 stdout, stderr = simple_stdout, simple_stderr
-jsi_home = os.path.expanduser("~/.jsi")
-solver_paths = os.path.join(jsi_home, "solvers.json")
 
 
 def get_exit_callback():

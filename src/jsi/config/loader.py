@@ -10,7 +10,7 @@ from jsi.utils import Printable, get_consoles, logger, simple_stderr, simple_std
 class Config:
     jsi_home: str
     definitions_file: str
-    solver_paths: str
+    path_cache: str
     definitions_default_path: Traversable
 
     stdout: Printable
@@ -48,9 +48,9 @@ class Config:
 
         # global defaults
         self.jsi_home = os.path.expanduser("~/.jsi")
-        self.solver_paths = os.path.join(self.jsi_home, "solvers.json")
-        self.definitions_file = os.path.join(self.jsi_home, "definitions.json")
-        self.definitions_default_path = files("jsi.config").joinpath("definitions.json")
+        self.path_cache = os.path.join(self.jsi_home, "cache.json")
+        self.definitions_file = os.path.join(self.jsi_home, "solvers.json")
+        self.definitions_default_path = files("jsi.config").joinpath("solvers.json")
 
     def setup_consoles(self):
         self.stdout, self.stderr = get_consoles()
@@ -120,14 +120,14 @@ def find_available_solvers(
 ) -> dict[str, str]:
     stderr = config.stderr
 
-    solver_paths = config.solver_paths
-    if os.path.exists(solver_paths):
+    path_cache = config.path_cache
+    if os.path.exists(path_cache):
         if config.verbose:
-            stderr.print(f"loading solver paths from cache ('{solver_paths}')")
+            stderr.print(f"loading solver paths from cache ('{path_cache}')")
 
         import json
 
-        with open(solver_paths) as f:
+        with open(path_cache) as f:
             try:
                 paths = json.load(f)
             except json.JSONDecodeError as err:
@@ -164,7 +164,7 @@ def find_available_solvers(
         if not os.path.exists(config.jsi_home):
             os.makedirs(config.jsi_home)
 
-        with open(solver_paths, "w") as f:
+        with open(path_cache, "w") as f:
             json.dump(paths, f)
 
     return paths
