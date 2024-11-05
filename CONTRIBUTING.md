@@ -23,6 +23,12 @@ python -m jsi --help
 rye run pytest -v -k <test_name>
 ```
 
+You can run install the development version of jsi using uv:
+
+```sh
+uv tool install --reinstall /path/to/jsi
+```
+
 ### Redirect log output
 
 ```sh

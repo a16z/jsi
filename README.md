@@ -7,12 +7,13 @@ just solve it - a command-line utility to run a portfolio of [SMT](https://en.wi
 
 ## Highlights
 
-- 🏆 acts as a "virtual best solver" by running multiple solvers in parallel and returning the result of the fastest solver
+- 🏆 acts as a "virtual best solver" by running multiple solvers in parallel and printing the result of the fastest solver to stdout
 - 🔍 discovers available solvers on on the PATH at runtime
 - 🛣️ runs solvers in parallel and monitors their progress
-- ⏰ can terminate solvers early after a timeout
-- 🔪 jsi can be interrupted by Ctrl-C and it will kill any solvers still running
+- ⏰ can terminate solvers after a timeout
+- ⏯️ can be interrupted by Ctrl-C and remaining solvers will be killed
 - 🏎 runs with minimal startup time (<100ms), and also supports an experimental daemon mode with a rust client for extra low-latency (<10ms)
+- 🔪 reaps orphaned solver processes
 - 🖥️ supports macOS and Linux
 - 🐍 supports Python 3.11+
 
@@ -32,7 +33,8 @@ jsi --help
 
 ## Features
 
-### 🧰 Configuration
+<details>
+<summary>### 🧰 Configuration</summary>
 
 This is how jsi finds and runs solvers:
 
@@ -49,14 +51,14 @@ It does this because scanning the PATH can be slow, but loading cached paths is 
 
 > [!TIP]
 > `~/.jsi/cache.json` can always be safely deleted, jsi will generate it again next time it runs. If you make changes to `~/.jsi/solvers.json` (like adding a new solver), you should delete the cache file, otherwise jsi won't pick up the new solver.
-
+</details>
 
 ### 🎨 Rich Output
 
 jsi uses [rich](https://rich.readthedocs.io/en/stable/) to render nice colored output. However importing rich at startup adds about 30-40ms to jsi's startup time, so by default jsi only uses rich if it detects that its output is a tty.
 
 > [!TIP]
-> if you want to minimize jsi's startup time, you can force it to use basic output by redirecting its stderr to a file: `jsi ... 2> jsi.out`
+> if you want to minimize jsi's startup time, you can force it to use basic output by redirecting its stderr to a file: `jsi ... 2> jsi.err`
 
 
 ### 📋 Run a specific sequence of solvers
@@ -65,7 +67,7 @@ Sometimes it can be useful to run only a subset of available solvers, for instan
 
 jsi supports a `--sequence` option that allows you to specify a sequence of solvers to run as a comma-separated list of solver names (as defined in your `~/.jsi/solvers.json` file).
 
-![Screenshot of jsi running a sequence of solvers](static/images/sequence-screenshot.png)
+![Screenshot of jsi running a sequence of solvers](static/images/jsi-sequence-screenshot.png)
 
 
 ### 📊 CSV Output
@@ -123,12 +125,12 @@ You can then send requests to the daemon:
 
 ```sh
 # directly with nc
-$ echo -n ~/projects/jsi/examples/easy-sat.smt2 | nc -U ~/.jsi/daemon/server.sock
+$ echo -n $(pwd)/examples/easy-sat.smt2 | nc -U ~/.jsi/daemon/server.sock
 sat
 ; (result from yices)
 
 # with the included Python client
-$ python -m jsi.client ~/projects/jsi/examples/easy-sat.smt2
+$ python -m jsi.client examples/easy-sat.smt2
 sat
 ; (result from yices)
 ```
@@ -143,7 +145,7 @@ or for the lowest latency, use the included Rust client:
 (cd jsi-client-rs && ln -s $(pwd)/target/release/jsif /usr/local/bin/jsif)
 
 # use it
-jsif ~/projects/jsi/examples/easy-sat.smt2
+jsif examples/easy-sat.smt2
 ```
 
 This benchmark shows why you might want to use the Rust client:
