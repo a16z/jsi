@@ -189,12 +189,9 @@ def parse_time(arg: str) -> float:
 
 def parse_args(args: list[str]) -> Config:
     config = Config()
+    args_iter = iter(args)
 
-    i = 0
-    while i < len(args):
-        arg = args[i]
-        i += 1
-
+    for arg in args_iter:
         match arg:
             case "--version":
                 raise SystemExit("jsi v0.1.0")
@@ -208,8 +205,6 @@ def parse_args(args: list[str]) -> Config:
                 config.verbose = True
             case "--full-run":
                 config.early_exit = False
-            case "--output":
-                config.output_dir = arg
             case "--model":
                 config.model = True
             case "--csv":
@@ -218,15 +213,19 @@ def parse_args(args: list[str]) -> Config:
                 config.reaper = True
             case "--daemon":
                 config.daemon = True
-            case "--timeout":
-                config.timeout_seconds = parse_time(args[i])
-                i += 1
-            case "--interval":
-                config.interval_seconds = parse_time(args[i])
-                i += 1
-            case "--sequence":
-                config.sequence = args[i].split(",")
-                i += 1
+            case "--output" | "--timeout" | "--interval" | "--sequence" as flag:
+                value = next(args_iter, None)
+                if value is None:
+                    raise BadParameterError(f"missing value after {flag}")
+                match flag:
+                    case "--output":
+                        config.output_dir = value
+                    case "--timeout":
+                        config.timeout_seconds = parse_time(value)
+                    case "--interval":
+                        config.interval_seconds = parse_time(value)
+                    case "--sequence":
+                        config.sequence = value.split(",")
             case _:
                 if arg.startswith("--"):
                     raise BadParameterError(f"unknown argument: {arg}")

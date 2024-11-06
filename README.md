@@ -10,8 +10,9 @@ just solve it - a command-line utility to run a portfolio of [SMT](https://en.wi
 - 🏆 acts as a "virtual best solver" by running multiple solvers in parallel and printing the result of the fastest solver to stdout
 - 🔍 discovers available solvers on on the PATH at runtime
 - 🛣️ runs solvers in parallel and monitors their progress
+- 📜 parses solver output to determine if the problem is sat, unsat, error, unknown, etc
 - ⏰ can terminate solvers after a timeout
-- ⏯️ can be interrupted by Ctrl-C and remaining solvers will be killed
+- ⏸️ can be interrupted with Ctrl-C and remaining solvers will be killed
 - 🏎 runs with minimal startup time (<100ms), and also supports an experimental daemon mode with a rust client for extra low-latency (<10ms)
 - 🔪 reaps orphaned solver processes
 - 🖥️ supports macOS and Linux
