@@ -114,29 +114,36 @@ def load_definitions(config: Config) -> dict[str, SolverDefinition]:
     return parse_definitions(json.loads(data))
 
 
-def find_available_solvers(
+def load_solvers(
     solver_definitions: dict[str, SolverDefinition],
     config: Config,
 ) -> dict[str, str]:
-    stderr = config.stderr
 
     path_cache = config.path_cache
-    if os.path.exists(path_cache):
-        if config.verbose:
-            stderr.print(f"loading solver paths from cache ('{path_cache}')")
+    if not os.path.exists(path_cache):
+        return {}
 
-        import json
+    if config.verbose:
+        stderr = config.stderr
+        stderr.print(f"loading solver paths from cache ('{path_cache}')")
 
-        with open(path_cache) as f:
-            try:
-                paths = json.load(f)
-            except json.JSONDecodeError as err:
-                logger.error(f"error loading solver cache: {err}")
-                paths = {}
+    import json
 
-        if paths:
+    with open(path_cache) as f:
+        try:
+            paths = json.load(f)
             return paths
+        except json.JSONDecodeError as err:
+            logger.error(f"error loading solver cache: {err}")
+            return {}
 
+
+def find_solvers(
+    solver_definitions: dict[str, SolverDefinition],
+    config: Config,
+) -> dict[str, str]:
+
+    stderr = config.stderr
     if config.verbose:
         stderr.print("looking for solvers available on PATH:")
 
@@ -157,14 +164,20 @@ def find_available_solvers(
     if config.verbose:
         stderr.print()
 
-    # save the paths to the solver_paths file
-    if paths:
-        import json
-
-        if not os.path.exists(config.jsi_home):
-            os.makedirs(config.jsi_home)
-
-        with open(path_cache, "w") as f:
-            json.dump(paths, f)
-
     return paths
+
+
+def save_solvers(
+    paths: dict[str, str],
+    config: Config,
+):
+    if not paths:
+        return
+
+    import json
+
+    if not os.path.exists(config.jsi_home):
+        os.makedirs(config.jsi_home)
+
+    with open(config.path_cache, "w") as f:
+        json.dump(paths, f)

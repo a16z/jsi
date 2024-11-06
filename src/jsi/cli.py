@@ -57,7 +57,13 @@ import threading
 import time
 from functools import partial
 
-from jsi.config.loader import Config, find_available_solvers, load_definitions
+from jsi.config.loader import (
+    Config,
+    find_solvers,
+    load_definitions,
+    load_solvers,
+    save_solvers,
+)
 from jsi.core import (
     Command,
     ProcessController,
@@ -313,21 +319,29 @@ def main(args: list[str] | None = None) -> int:
         solver_definitions = load_definitions(config)
 
     if not solver_definitions:
-        stderr.print("error: no solver definitions found", style="red")
+        stderr.print("error: no solver definitions found")
         return 1
 
     with timer("find_available_solvers"):
         # maps solver name to executable path
-        available_solvers = find_available_solvers(solver_definitions, config)
+        available_solvers = load_solvers(solver_definitions, config)
+        if not available_solvers:
+            available_solvers = find_solvers(solver_definitions, config)
+            save_solvers(available_solvers, config)
 
     if not available_solvers:
-        stderr.print("error: no solvers found on PATH", style="red")
+        stderr.print("error: no solvers found on PATH")
         return 1
 
     # build the commands to run the solvers
     # run the solvers in the specified sequence, or fallback to the default order
     defs = solver_definitions
     enabled_solvers = [solver for solver in available_solvers if defs[solver].enabled]
+
+    if not enabled_solvers:
+        n = len(available_solvers)
+        stderr.print(f"error: found {n} solver(s) but none are enabled")
+        return 1
 
     commands: list[Command] = base_commands(
         config.sequence or enabled_solvers,

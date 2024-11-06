@@ -442,7 +442,6 @@ def set_input_output(commands: list[Command], config: Config):
     assert file is not None
     assert output is not None
 
-
     for command in commands:
         command.input_file = file
         command.stdout = PIPE

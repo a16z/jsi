@@ -10,6 +10,7 @@ from pathlib import Path
 
 Fileish = io.TextIOWrapper | int | None
 
+
 class Closeable:
     def close(self) -> None: ...
 
@@ -158,6 +159,9 @@ def readable_size(num: int | float) -> str:
         case _:
             return f"{num/(1024*1024):.1f}MiB"
 
+
+def num_solvers_str(num: int) -> str:
+    return "1 solver" if num == 1 else f"{num} solvers"
 
 logger = SimpleLogger()
 simple_stdout = SimpleConsole(file=sys.stdout)

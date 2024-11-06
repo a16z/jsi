@@ -3,7 +3,7 @@ from rich.table import Table
 from rich.text import Text
 
 from jsi.core import Command, ProcessController, Task, TaskResult, TaskStatus
-from jsi.utils import file_loc, get_consoles, readable_size
+from jsi.utils import file_loc, get_consoles, num_solvers_str, readable_size
 
 _, stderr = get_consoles()
 
@@ -47,7 +47,6 @@ def get_results_table(controller: ProcessController) -> Table:
     for command in sorted(commands, key=lambda x: (not x.maybe_ok(), x.elapsed() or 0)):
         command_output = file_loc(command.stdout_loc or command.stdout)
 
-
         table.add_row(
             command.name,
             styled_result(command.result()),
@@ -78,10 +77,10 @@ def log_process_exit(command: Command, task: Task, status: Status):
     )
     stderr.print(message)
 
+
 def update_status(task: Task, status: Status):
     not_done = sum(1 for proc in task.processes if not proc.done())
-    solver_str = "solver" if not_done == 1 else "solvers"
-    status.update(f"{not_done} {solver_str} still running (Ctrl-C to stop)")
+    status.update(f"{num_solvers_str(not_done)} still running (Ctrl-C to stop)")
 
 
 def on_proc_start(command: Command, task: Task, status: Status):
