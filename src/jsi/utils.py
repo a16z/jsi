@@ -8,6 +8,7 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 
+Fileish = io.TextIOWrapper | int | None
 
 class Closeable:
     def close(self) -> None: ...
@@ -138,14 +139,20 @@ def pid_exists(pid: int) -> bool:
         return False
 
 
-def file_loc(iowrapper: io.TextIOWrapper | int | None) -> str:
-    return iowrapper.name if isinstance(iowrapper, io.TextIOWrapper) else ""
+def file_loc(output: str | Fileish) -> str:
+    if isinstance(output, str):
+        return output
+
+    if isinstance(output, io.TextIOWrapper):
+        return output.name
+
+    return ""
 
 
 def readable_size(num: int | float) -> str:
     match num:
         case n if n < 1024:
-            return f"{n:.1f}B"
+            return f"{n}B"
         case n if n < 1024 * 1024:
             return f"{n/1024:.1f}KiB"
         case _:

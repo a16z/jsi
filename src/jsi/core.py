@@ -104,8 +104,12 @@ class Command:
     input_file: str | None
     stdout: io.TextIOWrapper | int | None
     stderr: io.TextIOWrapper | int | None
+    stdout_loc: str | None
+    stderr_loc: str | None
     stdout_text: str | None
     stderr_text: str | None
+    output_dir: str
+    timeout_seconds: float
 
     # extra arguments to pass to Popen
     kwargs: dict[str, object]
@@ -129,22 +133,30 @@ class Command:
         self,
         name: str,
         args: Sequence[str],
+        output_dir: str | None = None,
         input_file: str | None = None,
         stdout: io.TextIOWrapper | int | None = None,
         stderr: io.TextIOWrapper | int | None = None,
         start_delay_ms: int = 0,
+        timeout_seconds: float = 0,
         **kwargs: object,  # type: ignore
     ):
         self.name = name
         self.args = args
+        self.output_dir = output_dir or "."
         self.input_file = input_file
         self.stdout = stdout
         self.stderr = stderr
+        self.timeout_seconds = timeout_seconds
         self.kwargs = kwargs
 
         # cached stdout/stderr
         self.stdout_text = None
         self.stderr_text = None
+
+        # output locations
+        self.stdout_loc = None
+        self.stderr_loc = None
 
         # internal fields
         self._process = None
@@ -312,6 +324,22 @@ class Command:
         if self.stdout == PIPE or self.stderr == PIPE:
             stdout_content, stderr_content = self.communicate()
 
+            assert self.input_file is not None
+            basename = os.path.basename(self.input_file)
+            output_dir = self.output_dir
+
+            if stdout_content:
+                stdout_file = os.path.join(output_dir, f"{basename}.{self.name}.out")
+                with open(stdout_file, "w") as f:
+                    f.write(stdout_content)
+                self.stdout_loc = stdout_file
+
+            if stderr_content:
+                stderr_file = os.path.join(output_dir, f"{basename}.{self.name}.err")
+                with open(stderr_file, "w") as f:
+                    f.write(stderr_content)
+                self.stderr_loc = stderr_file
+
         if stdout_content is None:
             stdout_content = try_reading(self.stdout)
 
@@ -400,6 +428,7 @@ def base_commands(
             Command(
                 name=solver_name,
                 args=args,
+                output_dir=config.output_dir,
             )
         )
 
@@ -413,14 +442,11 @@ def set_input_output(commands: list[Command], config: Config):
     assert file is not None
     assert output is not None
 
-    basename = os.path.basename(file)
 
     for command in commands:
         command.input_file = file
-        stdout_file = os.path.join(output, f"{basename}.{command.name}.out")
-        stderr_file = os.path.join(output, f"{basename}.{command.name}.err")
-        command.stdout = open(stdout_file, "w")  # noqa: SIM115
-        command.stderr = open(stderr_file, "w")  # noqa: SIM115
+        command.stdout = PIPE
+        command.stderr = PIPE
 
 
 class Task:
