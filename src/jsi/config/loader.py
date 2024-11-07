@@ -45,6 +45,7 @@ class Config:
         self.verbose = verbose
         self.stdout = simple_stdout
         self.stderr = simple_stderr
+        self.solver_versions = False
 
         # global defaults
         self.jsi_home = os.path.expanduser("~/.jsi")

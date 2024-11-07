@@ -36,6 +36,7 @@ Less common options:
 
 Miscellaneous:
   --version           show the version and exit
+  --versions          show the versions of all available and enabledsolvers and exit
   --help              show this message and exit
 
 Examples:
@@ -201,6 +202,8 @@ def parse_args(args: list[str]) -> Config:
         match arg:
             case "--version":
                 raise SystemExit("jsi v0.1.0")
+            case "--versions":
+                config.solver_versions = True
             case "--help":
                 raise SystemExit(__doc__)
             case "--perf":
@@ -241,7 +244,8 @@ def parse_args(args: list[str]) -> Config:
 
                 config.input_file = arg
 
-    if not config.daemon:
+    # some options don't require an input file
+    if not config.daemon and not config.solver_versions:
         if not config.input_file:
             raise BadParameterError("no input file provided")
 
@@ -268,6 +272,30 @@ def parse_args(args: list[str]) -> Config:
         config.output_dir = os.path.dirname(config.input_file)
 
     return config
+
+
+def extract_version(output: str) -> str:
+    """Extract version number from solver output.
+
+    Handles both standalone version numbers (e.g. "2.3.4-dev\n") and
+    version numbers embedded in text (e.g. "Z3 version 4.12.2 - 64 bit\n").
+    """
+
+    output = output.strip()
+    words = output.split()
+
+    # try to find word containing only version-like characters
+    for word in words:
+        if all(c.isdigit() or c == '.' for c in word):
+            return word
+
+    # try to find version after the word "version"
+    try:
+        version_idx = words.index('version') + 1
+        return words[version_idx]
+    except (ValueError, IndexError):
+        # If we can't parse it, return the whole string
+        return output
 
 
 def main(args: list[str] | None = None) -> int:
@@ -342,6 +370,19 @@ def main(args: list[str] | None = None) -> int:
         n = len(available_solvers)
         stderr.print(f"error: found {n} solver(s) but none are enabled")
         return 1
+
+    if config.solver_versions:
+        import subprocess
+
+        for solver_name in enabled_solvers:
+            output = subprocess.run(
+                [available_solvers[solver_name], "--version"],
+                capture_output=True,
+                text=True,
+            ).stdout
+
+            print(f"{solver_name}: {extract_version(output)}")
+        return 0
 
     commands: list[Command] = base_commands(
         config.sequence or enabled_solvers,
