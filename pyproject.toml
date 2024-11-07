@@ -1,5 +1,5 @@
 [project]
-name = "jsi"
+name = "just-solve-it"
 dynamic = ["version"]
 description = "just solve it - a command line tool to run multiple SMT (Satisfiability Modulo Theories) solvers in parallel"
 authors = [
