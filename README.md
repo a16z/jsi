@@ -1,6 +1,6 @@
 # jsi
 
-![PyPI - Version](https://img.shields.io/pypi/v/just-solve-it)
+[![PyPI - Version](https://img.shields.io/pypi/v/just-solve-it)](https://pypi.org/project/just-solve-it)
 
 just solve it - a command-line utility to run a portfolio of [SMT](https://en.wikipedia.org/wiki/Satisfiability_modulo_theories) solvers in parallel
 
