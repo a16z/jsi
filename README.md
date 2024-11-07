@@ -25,7 +25,7 @@ We recommend using [uv](https://docs.astral.sh/uv/) to install jsi.
 
 ```sh
 # install jsi
-uv tool install jsi
+uv tool install just-solve-it
 
 # run it
 jsi --help
