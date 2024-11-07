@@ -1,5 +1,7 @@
 # jsi
 
+![PyPI - Version](https://img.shields.io/pypi/v/just-solve-it)
+
 just solve it - a command-line utility to run a portfolio of [SMT](https://en.wikipedia.org/wiki/Satisfiability_modulo_theories) solvers in parallel
 
 ![Screenshot of jsi running on an unsat division problem](static/images/unsat-div-screenshot.png)
