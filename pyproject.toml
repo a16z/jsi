@@ -3,7 +3,8 @@ name = "just-solve-it"
 dynamic = ["version"]
 description = "just solve it - a command line tool to run multiple SMT (Satisfiability Modulo Theories) solvers in parallel"
 authors = [
-    { name = "karmacoma", email = "karma@a16z.com" }
+    { name = "karmacoma", email = "karma@a16z.com" },
+    { name = "a16z crypto research lab", email = "crypto-research-lab@a16z.com" },
 ]
 dependencies = [
     "pyright>=1.1.378",
