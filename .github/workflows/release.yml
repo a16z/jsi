@@ -1,19 +1,27 @@
-# based on https://github.com/carderne/postmodern-python/blob/main/.github/workflows/release.yml
-
 name: release
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to publish (e.g., v1.0.0)'
+        required: true
+        type: string
+
 jobs:
   publish:
-    environment: release       # needed for PyPI OIDC
+    environment: release
     runs-on: ubuntu-latest
     permissions:
       id-token: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install build && python -m build       # build
-      - uses: pypa/gh-action-pypi-publish@release/v1    # publish
+      - run: pip install build && python -m build
+      - uses: pypa/gh-action-pypi-publish@release/v1

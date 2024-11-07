@@ -65,3 +65,16 @@ hyperfine --warmup 3 --shell=none 'python -m jsi examples/easy-sat.smt2 --sequen
 ```
 
 ![Screenshot of hyperfine benchmark](static/images/hyperfine-screenshot.png)
+
+### Releasing
+
+We use a GitHub Actions workflow to build and publish releases to PyPI when a new tag is pushed to the repo.
+
+To release a new version, push a new tag to the repo:
+
+```sh
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+This will trigger the [release workflow](https://github.com/a16z/jsi/actions/workflows/release.yml), which builds the project and publishes it to PyPI.
