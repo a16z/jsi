@@ -8,7 +8,7 @@ just solve it - a command-line utility to run a portfolio of [SMT](https://en.wi
 ## Highlights
 
 - 🏆 acts as a "virtual best solver" by running multiple solvers in parallel and printing the result of the fastest solver to stdout
-- 🔍 discovers available solvers on on the PATH at runtime
+- 🔍 discovers available solvers on the PATH at runtime
 - 🛣️ runs solvers in parallel and monitors their progress
 - 📜 parses solver output to determine if the problem is sat, unsat, error, unknown, etc
 - ⏰ can terminate solvers after a timeout
@@ -29,6 +29,12 @@ uv tool install jsi
 
 # run it
 jsi --help
+```
+
+Verify the installation with one of the included examples:
+
+```sh
+jsi --full-run --timeout 2s examples/unsat-div.smt2
 ```
 
 
@@ -188,6 +194,52 @@ Summary
 ⚠️ **Warning**: the daemon mode is experimental and subject to change. Not all options are supported at this time (like `--sequence`, `--csv`, `--timeout`, etc).
 </details>
 
+
+## Tips
+
+<details>
+<summary>Installing solvers</summary>
+
+If you have no solver installed (or even only a single solver installed), jsi will not be particularly useful. It won't install any solvers for you, you need to install them yourself.
+
+If you want to run a Docker image that is already pre-configured with multiple high-performance solvers, check out [our solvers image](https://github.com/a16z/halmos/tree/main/packages/solvers).
+
+</details>
+
+
+<details>
+<summary>Adding new solvers</summary>
+
+To add a new solver, the process is roughly:
+- if you already have `~/.jsi/solvers.json`, modify it directly
+- if you don't have `~/.jsi/solvers.json`, copy [src/jsi/config/solvers.json](src/jsi/config/solvers.json) to `~/.jsi/solvers.json`
+- add the new solver to the `~/.jsi/solvers.json` file (you will need to fill the executable name, the args you want to always pass to the solver, and optionally the model generation option)
+- delete `~/.jsi/cache.json` if it exists
+- on the next run, jsi will should pick up the new solver
+
+If you wish to contribute a new solver definition to upstream jsi, please check out the [CONTRIBUTING.md](CONTRIBUTING.md) file for more information and submit a PR.
+
+</details>
+
+
+<details>
+<summary>Running multiple versions of the same solver</summary>
+
+Follow the instructions above to add the solver, but use different names for each version.
+
+The only issue is that you will need to make sure the executable names are unique, so that jsi can tell them apart (e.g. `yices-2.6.4` and `yices-2.6.5`).
+
+</details>
+
+
+<details>
+<summary>Disabling a solver</summary>
+
+To avoid running a particular solver:
+- temporarily, run with an explicit `--sequence` option that excludes the solver
+- permanently, edit `~/.jsi/solvers.json` and set `enabled` to `false`
+
+</details>
 
 ## Contributing
 
