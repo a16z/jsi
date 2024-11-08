@@ -200,6 +200,22 @@ Summary
 ## Tips
 
 <details>
+<summary>Supported solvers</summary>
+
+These solvers have been tested and are known to work:
+
+    bitwuzla: 0.3.0-dev
+    boolector: 3.2.3
+    cvc4: 1.8
+    cvc5: 1.1.2
+    stp: 2.3.3
+    yices: 2.6.4
+    z3: 4.12.2
+
+</details>
+
+
+<details>
 <summary>Installing solvers</summary>
 
 If you have no solver installed (or even only a single solver installed), jsi will not be particularly useful. It won't install any solvers for you, you need to install them yourself.
