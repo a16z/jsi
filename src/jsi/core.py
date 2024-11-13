@@ -393,7 +393,11 @@ def base_commands(
         if not solver_def:
             raise RuntimeError(f"unknown solver: {solver_name}")
 
-        executable_path = available_solvers[solver_name]
+        executable_name = solver_def.executable
+        executable_path = available_solvers.get(executable_name)
+        if not executable_path:
+            continue
+
         args = [executable_path]
 
         # append the model option if requested
