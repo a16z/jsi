@@ -374,14 +374,15 @@ def main(args: list[str] | None = None) -> int:
     if config.solver_versions:
         import subprocess
 
-        for solver_name in enabled_solvers:
+        executables: set[str] = set(defs[x].executable for x in enabled_solvers)
+        for executable in executables:
             output = subprocess.run(
-                [available_solvers[solver_name], "--version"],
+                [executable, "--version"],
                 capture_output=True,
                 text=True,
             ).stdout
+            print(f"{executable}: {extract_version(output)}")
 
-            print(f"{solver_name}: {extract_version(output)}")
         return 0
 
     commands: list[Command] = base_commands(
