@@ -23,11 +23,11 @@ nodeenv==1.9.1
 pygments==2.18.0
     # via rich
 pyright==1.1.382.post0
-    # via jsi
+    # via just-solve-it
 python-daemon==3.0.1
-    # via jsi
+    # via just-solve-it
 rich==13.8.1
-    # via jsi
+    # via just-solve-it
 setuptools==75.1.0
     # via python-daemon
 typing-extensions==4.12.2

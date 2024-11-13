@@ -33,11 +33,11 @@ pluggy==1.5.0
 pygments==2.18.0
     # via rich
 pyright==1.1.378
-    # via jsi
+    # via just-solve-it
 pytest==8.3.2
 python-daemon==3.0.1
-    # via jsi
+    # via just-solve-it
 rich==13.8.1
-    # via jsi
+    # via just-solve-it
 setuptools==75.1.0
     # via python-daemon
