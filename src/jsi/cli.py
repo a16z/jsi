@@ -209,6 +209,11 @@ def parse_time(arg: str) -> float:
         return float(arg)
 
 
+def get_version():
+    from importlib.metadata import version
+    return version("just-solve-it")
+
+
 def parse_args(args: list[str]) -> Config:
     config = Config()
     args_iter = iter(args)
@@ -216,7 +221,7 @@ def parse_args(args: list[str]) -> Config:
     for arg in args_iter:
         match arg:
             case "--version":
-                raise SystemExit("jsi v0.1.0")
+                raise SystemExit(f"jsi {get_version()}")
             case "--versions":
                 config.solver_versions = True
             case "--help":
@@ -368,8 +373,17 @@ def main(args: list[str] | None = None) -> int:
     with timer("find_available_solvers"):
         # maps executable name to executable path
         available_solvers = load_solvers(solver_definitions, config)
-        if not available_solvers:
+
+        cache_version = available_solvers.get("__version__")
+        stale_cache = cache_version != get_version()
+        if stale_cache:
+            stderr.print(f"warning: ignoring stale solver cache ({cache_version=})")
+
+        if not available_solvers or stale_cache:
             available_solvers = find_solvers(solver_definitions, config)
+
+            # stamp the current jsi version in the cache before saving
+            available_solvers["__version__"] = get_version()
             save_solvers(available_solvers, config)
 
     if not available_solvers:
