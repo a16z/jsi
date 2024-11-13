@@ -4,7 +4,11 @@
         "model": "--produce-models",
         "args": [],
         "meta": "only supports model generation if smt file includes (get-model)"
-
+    },
+    "bitwuzla-abstraction": {
+        "executable": "bitwuzla",
+        "model": "--produce-models",
+        "args": ["--abstraction"]
     },
     "boolector": {
         "executable": "boolector",
@@ -20,6 +24,11 @@
         "executable": "cvc5",
         "model": "--produce-models",
         "args": []
+    },
+    "cvc5-int-blasting": {
+        "executable": "cvc5",
+        "model": "--produce-models",
+        "args": ["--solve-bv-as-int=iand", "--iand-mode=bitwise"]
     },
     "stp": {
         "executable": "stp",
