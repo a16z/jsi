@@ -286,12 +286,12 @@ def extract_version(output: str) -> str:
 
     # try to find word containing only version-like characters
     for word in words:
-        if all(c.isdigit() or c == '.' for c in word):
+        if all(c.isdigit() or c == "." for c in word):
             return word
 
     # try to find version after the word "version"
     try:
-        version_idx = words.index('version') + 1
+        version_idx = words.index("version") + 1
         return words[version_idx]
     except (ValueError, IndexError):
         # If we can't parse it, return the whole string

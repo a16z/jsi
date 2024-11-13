@@ -9,7 +9,6 @@ from enum import Enum
 from pathlib import Path
 
 
-
 class Closeable:
     def close(self) -> None: ...
 
@@ -146,7 +145,7 @@ def file_loc(iowrapper: io.TextIOWrapper | int | None) -> str:
 def readable_size(num: int | float) -> str:
     match num:
         case n if n < 1024:
-            return f"{n:.1f}B"
+            return f"{n}B"
         case n if n < 1024 * 1024:
             return f"{n/1024:.1f}KiB"
         case _:
@@ -155,6 +154,7 @@ def readable_size(num: int | float) -> str:
 
 def num_solvers_str(num: int) -> str:
     return "1 solver" if num == 1 else f"{num} solvers"
+
 
 logger = SimpleLogger()
 simple_stdout = SimpleConsole(file=sys.stdout)

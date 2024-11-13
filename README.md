@@ -202,7 +202,7 @@ Summary
 <details>
 <summary>Supported solvers</summary>
 
-These solvers have been tested and are known to work:
+These solvers have been tested and are known to work with jsi:
 
     bitwuzla: 0.3.0-dev
     boolector: 3.2.3
