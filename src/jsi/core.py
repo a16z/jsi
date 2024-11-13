@@ -272,8 +272,14 @@ class Command:
         if self._process.returncode == -15:
             return timeout if self.has_timed_out else killed
 
-        stdout_content, _ = self.read_io()
+        stdout_content, stderr_content = self.read_io()
         if not stdout_content:
+            if stderr_content and "error" in stderr_content:
+                return error
+
+            if self.returncode != 0:
+                return error
+
             return unknown
 
         line = first_line(stdout_content).strip()

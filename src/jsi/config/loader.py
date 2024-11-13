@@ -119,7 +119,6 @@ def load_solvers(
     solver_definitions: dict[str, SolverDefinition],
     config: Config,
 ) -> dict[str, str]:
-
     path_cache = config.path_cache
     if not os.path.exists(path_cache):
         return {}
@@ -143,7 +142,6 @@ def find_solvers(
     solver_definitions: dict[str, SolverDefinition],
     config: Config,
 ) -> dict[str, str]:
-
     stderr = config.stderr
     if config.verbose:
         stderr.print("looking for solvers available on PATH:")
