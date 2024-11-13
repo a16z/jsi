@@ -143,26 +143,24 @@ def find_solvers(
     config: Config,
 ) -> dict[str, str]:
     stderr = config.stderr
-    if config.verbose:
-        stderr.print("looking for solvers available on PATH:")
+    stderr.print("looking for solvers available on PATH:")
 
     paths: dict[str, str] = {}
 
     import shutil
 
-    for solver_name, solver_def in solver_definitions.items():
-        path = shutil.which(solver_def.executable)  # type: ignore
+    executables = set(d.executable for d in solver_definitions.values())
+    for executable in executables:
+        path = shutil.which(executable)  # type: ignore
 
         if path is None:
-            stderr.print(f"{solver_name:>12} not found")
+            stderr.print(f"[yellow]{'N/A':>6}[/yellow] {executable}")
             continue
 
-        paths[solver_name] = path
-        stderr.print(f"{solver_name:>12} [green]OK[/green]")
+        paths[executable] = path
+        stderr.print(f"[green]{'OK':>6}[/green] {executable}")
 
-    if config.verbose:
-        stderr.print()
-
+    stderr.print()
     return paths
 
 

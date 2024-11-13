@@ -173,6 +173,8 @@ def reaper_thread():
     # Skip PID 1 check if we're running in a container
     # (when running interactively, the parent shell can have PID 1)
     skip_pid1 = is_in_container()
+    if skip_pid1:
+        logger.debug("containerized environment detected, skipping PID 1 check")
 
     def check_parent():
         while True:
@@ -364,7 +366,7 @@ def main(args: list[str] | None = None) -> int:
         return 1
 
     with timer("find_available_solvers"):
-        # maps solver name to executable path
+        # maps executable name to executable path
         available_solvers = load_solvers(solver_definitions, config)
         if not available_solvers:
             available_solvers = find_solvers(solver_definitions, config)
@@ -372,12 +374,13 @@ def main(args: list[str] | None = None) -> int:
 
     if not available_solvers:
         stderr.print("error: no solvers found on PATH")
+        stderr.print("see https://github.com/a16z/jsi?tab=readme-ov-file#tips for help")
         return 1
 
     # build the commands to run the solvers
     # run the solvers in the specified sequence, or fallback to the default order
     defs = solver_definitions
-    enabled_solvers = [solver for solver in available_solvers if defs[solver].enabled]
+    enabled_solvers = [solver for solver in defs if defs[solver].enabled]
 
     if not enabled_solvers:
         n = len(available_solvers)
@@ -387,14 +390,24 @@ def main(args: list[str] | None = None) -> int:
     if config.solver_versions:
         import subprocess
 
-        executables: set[str] = set(defs[x].executable for x in enabled_solvers)
-        for executable in executables:
+        done: set[str] = set()
+        for solver_name in enabled_solvers:
+            executable_name = solver_definitions[solver_name].executable
+            if executable_name not in available_solvers:
+                continue
+
+            executable_path = available_solvers[executable_name]
+            if executable_name in done:
+                continue
+
+            done.add(executable_name)
+
             output = subprocess.run(
-                [executable, "--version"],
+                [executable_path, "--version"],
                 capture_output=True,
                 text=True,
             ).stdout
-            print(f"{executable}: {extract_version(output)}")
+            print(f"{executable_name}: {extract_version(output)}")
 
         return 0
 
