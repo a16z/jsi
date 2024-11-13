@@ -147,34 +147,47 @@ def setup_signal_handlers(controller: ProcessController):
     atexit.register(cleanup)
 
 
-def monitor_parent():
-    """
-    Monitor the parent process and exit if it dies or changes.
+def is_in_container() -> bool:
+    """Check if we're running inside a container."""
 
-    Caveats:
-    - only works on POSIX systems
-    - only works if called early enough (before the original parent process exits)
-    """
+    if os.path.exists('/.dockerenv'):
+        return True
+    if os.path.exists('/run/.containerenv'):
+        return True
 
+    proc1_cgroup = '/proc/1/cgroup'
+    if os.path.exists(proc1_cgroup):
+        with open(proc1_cgroup) as f:
+            return any(
+                'docker' in line or 'container' in line
+                for line in f.readlines()
+            )
+
+    return False
+
+
+def reaper_thread():
+    """Monitor the parent process and exit if it dies or changes."""
     parent_pid = os.getppid()
+
+    # Skip PID 1 check if we're running in a container
+    # (when running interactively, the parent shell can have PID 1)
+    skip_pid1 = is_in_container()
 
     def check_parent():
         while True:
             try:
                 current_ppid = os.getppid()
 
-                # if parent PID changed (original parent died), we exit
-                if current_ppid != parent_pid or current_ppid == 1:
+                if current_ppid != parent_pid and (not skip_pid1 or current_ppid != 1):
                     stderr.print("parent process died, exiting...")
                     os.kill(os.getpid(), signal.SIGTERM)
                     break
-                time.sleep(1)  # check every second
+                time.sleep(1)
             except ProcessLookupError:
-                # if we can't check parent PID, assume parent died
                 os.kill(os.getpid(), signal.SIGTERM)
                 break
 
-    # Start monitoring in background thread
     monitor_thread = threading.Thread(target=check_parent, daemon=True)
     monitor_thread.start()
 
@@ -303,7 +316,7 @@ def main(args: list[str] | None = None) -> int:
     global stderr
 
     # kick off the parent monitor in the background as early as possible
-    monitor_parent()
+    reaper_thread()
 
     if args is None:
         args = sys.argv[1:]
