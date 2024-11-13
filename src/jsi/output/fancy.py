@@ -29,8 +29,8 @@ def styled_size(size: int) -> Text:
     return Text(readable_size(size))
 
 
-def styled_output(output: str) -> Text:
-    return Text(file_loc(output), style="bright_magenta")
+def styled_output(command: Command) -> Text:
+    return Text(file_loc(command.stdout), style="bright_magenta")
 
 
 def get_results_table(controller: ProcessController) -> Table:
@@ -43,17 +43,14 @@ def get_results_table(controller: ProcessController) -> Table:
     table.add_column("size", justify="right")
 
     commands = controller.commands
-
     for command in sorted(commands, key=lambda x: (not x.maybe_ok(), x.elapsed() or 0)):
-        command_output = file_loc(command.stdout_loc or command.stdout)
-
         table.add_row(
             command.name,
             styled_result(command.result()),
-            str(command.returncode) if command.returncode is not None else "-",
-            f"{command.elapsed():.2f}s" if command.elapsed() else "-",
-            styled_output(command_output) if command_output else "-",
-            styled_size(len(command.stdout_text)) if command.stdout_text else "-",
+            str(command.returncode) if command.returncode is not None else "N/A",
+            f"{command.elapsed():.2f}s" if command.elapsed() else "N/A",
+            styled_output(command) if command.stdout else "N/A",
+            styled_size(len(command.stdout_text) if command.stdout_text else 0),
         )
 
     return table

@@ -15,15 +15,13 @@ def get_results_csv(controller: ProcessController) -> str:
 
     commands = controller.commands
     for command in sorted(commands, key=lambda x: (not x.maybe_ok(), x.elapsed() or 0)):
-        command_output = command.stdout_loc or command.stdout
-
         writer.writerow(
             [
                 command.name,
-                command.result().value if command.result() else "-",
-                str(command.returncode) if command.returncode is not None else "-",
-                f"{command.elapsed():.2f}s" if command.elapsed() else "-",
-                file_loc(command_output) or "-",
+                command.result().value if command.result() else "N/A",
+                str(command.returncode) if command.returncode is not None else "N/A",
+                f"{command.elapsed():.2f}s" if command.elapsed() else "N/A",
+                file_loc(command.stdout) if command.stdout else "N/A",
                 len(command.stdout_text) if command.stdout_text else 0,
             ]
         )
