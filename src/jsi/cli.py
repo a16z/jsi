@@ -150,17 +150,16 @@ def setup_signal_handlers(controller: ProcessController):
 def is_in_container() -> bool:
     """Check if we're running inside a container."""
 
-    if os.path.exists('/.dockerenv'):
+    if os.path.exists("/.dockerenv"):
         return True
-    if os.path.exists('/run/.containerenv'):
+    if os.path.exists("/run/.containerenv"):
         return True
 
-    proc1_cgroup = '/proc/1/cgroup'
+    proc1_cgroup = "/proc/1/cgroup"
     if os.path.exists(proc1_cgroup):
         with open(proc1_cgroup) as f:
             return any(
-                'docker' in line or 'container' in line
-                for line in f.readlines()
+                "docker" in line or "container" in line for line in f.readlines()
             )
 
     return False
@@ -211,6 +210,7 @@ def parse_time(arg: str) -> float:
 
 def get_version():
     from importlib.metadata import version
+
     return version("just-solve-it")
 
 
