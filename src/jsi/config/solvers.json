@@ -38,7 +38,7 @@
     "yices": {
         "executable": "yices-smt2",
         "model": null,
-        "args": [],
+        "args": ["--smt2-model-format", "--bvconst-in-decimal"],
         "meta": "yices has no option to enable model generation, smt file must include (get-model)"
     },
     "z3": {
