@@ -147,9 +147,9 @@ def readable_size(num: int | float) -> str:
         case n if n < 1024:
             return f"{n}B"
         case n if n < 1024 * 1024:
-            return f"{n/1024:.1f}KiB"
+            return f"{n / 1024:.1f}KiB"
         case _:
-            return f"{num/(1024*1024):.1f}MiB"
+            return f"{num / (1024 * 1024):.1f}MiB"
 
 
 def num_solvers_str(num: int) -> str:

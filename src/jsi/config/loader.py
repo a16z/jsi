@@ -1,6 +1,7 @@
 import json
 import os
 from collections.abc import Sequence
+
 try:
     # for Python 3.14+; see https://docs.python.org/3/whatsnew/3.14.html#importlib-abc
     from importlib.resources.abc import Traversable
