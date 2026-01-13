@@ -1,6 +1,6 @@
 """just solve it - a command line tool to SMT solvers in parallel."""
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .cli import main  # for type checkers only
