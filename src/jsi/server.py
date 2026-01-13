@@ -36,8 +36,9 @@ import daemon  # type: ignore
 from jsi.config.loader import (
     Config,
     SolverDefinition,
-    find_available_solvers,
+    find_solvers,
     load_definitions,
+    load_solvers,
 )
 from jsi.core import (
     Command,
@@ -153,7 +154,10 @@ class Server:
     def __init__(self, config: Config):
         self.config = config
         self.solver_definitions = load_definitions(config)
-        self.available_solvers = find_available_solvers(self.solver_definitions, config)
+        # Try to load from cache first, otherwise find solvers on PATH
+        self.available_solvers = load_solvers(self.solver_definitions, config)
+        if not self.available_solvers:
+            self.available_solvers = find_solvers(self.solver_definitions, config)
 
     async def start(self):
         server = await asyncio.start_unix_server(
