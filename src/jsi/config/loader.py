@@ -1,7 +1,11 @@
 import json
 import os
 from collections.abc import Sequence
-from importlib.abc import Traversable
+try:
+    # For Python 3.14+
+    from importlib.resources.abc import Traversable
+except ImportError:
+    from importlib.abc import Traversable
 from importlib.resources import files
 
 from jsi.utils import Printable, get_consoles, logger, simple_stderr, simple_stdout
