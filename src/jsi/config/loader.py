@@ -2,7 +2,7 @@ import json
 import os
 from collections.abc import Sequence
 try:
-    # For Python 3.14+
+    # for Python 3.14+; see https://docs.python.org/3/whatsnew/3.14.html#importlib-abc
     from importlib.resources.abc import Traversable
 except ImportError:
     from importlib.abc import Traversable
