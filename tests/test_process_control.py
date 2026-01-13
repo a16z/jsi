@@ -12,6 +12,7 @@ from jsi.core import (
     Task,
     TaskResult,
     TaskStatus,
+    error,
     sat,
     unknown,
     unsat,
@@ -222,7 +223,7 @@ def test_controller_kill_before_start():
     "command,expected",
     [
         (cmd(sleep_ms=0, stdout="beep boop"), unknown),
-        (cmd(sleep_ms=0, stdout="", exit_code=1), unknown),
+        (cmd(sleep_ms=0, stdout="", exit_code=1), error),
         (cmd(sleep_ms=100, stdout=sat, exit_code=1), sat),
         (cmd(sleep_ms=100, stdout=unsat), unsat),
     ],
