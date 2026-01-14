@@ -221,7 +221,7 @@ def parse_args(args: list[str]) -> Config:
     for arg in args_iter:
         match arg:
             case "--version":
-                raise SystemExit(f"jsi {get_version()}")
+                raise SystemExit(f"jsi v{get_version()}")
             case "--versions":
                 config.solver_versions = True
             case "--help":
