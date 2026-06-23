@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import io
 import os
+import sys
 import threading
 import time
 from collections.abc import Callable, Sequence
@@ -106,6 +108,7 @@ class Command:
     stderr: io.TextIOWrapper | int | None
     stdout_text: str | None
     stderr_text: str | None
+    memory_limit_kb: int | None
 
     # extra arguments to pass to Popen
     kwargs: dict[str, object]
@@ -120,6 +123,8 @@ class Command:
     _process: Popen[str] | None
     _result: TaskResult | None
     _lock: threading.Lock
+    _memory_limit_triggered: bool
+    _memory_limit_message: str | None
 
     # to facilitate testing
     start_delay_ms: int
@@ -145,11 +150,14 @@ class Command:
         # cached stdout/stderr
         self.stdout_text = None
         self.stderr_text = None
+        self.memory_limit_kb = None
 
         # internal fields
         self._process = None
         self._result = None
         self._lock = threading.Lock()
+        self._memory_limit_triggered = False
+        self._memory_limit_message = None
 
         # metadata
         self.start_time = None
@@ -172,6 +180,10 @@ class Command:
             if self._process is not None:
                 raise RuntimeError("Process already started")
 
+            if self.on_kill_list:
+                logger.debug(f"not starting {self.bin_name()}, already marked for kill")
+                return
+
             if self.start_delay_ms:
                 # kick off a thread that will wait and then start the process
                 delay = self.start_delay_ms
@@ -186,17 +198,69 @@ class Command:
             else:
                 logger.debug(f"starting {self.parts()}")
                 self.start_time = time.time()
+
+                memory_limit_kb = self.kwargs.pop("memory_limit_kb", None)
+                if isinstance(memory_limit_kb, int):
+                    self.memory_limit_kb = memory_limit_kb
+                    wrapper = """
+import json
+import subprocess
+import sys
+import time
+
+argv = json.loads(sys.argv[1])
+memory_limit_kb = int(sys.argv[2])
+proc = subprocess.Popen(argv)
+
+try:
+    while proc.poll() is None:
+        try:
+            rss_output = subprocess.run(
+                ["ps", "-o", "rss=", "-p", str(proc.pid)],
+                capture_output=True,
+                text=True,
+                check=False,
+            ).stdout.strip()
+            rss_kb = int(rss_output.split()[0]) if rss_output else 0
+        except Exception:
+            rss_kb = 0
+
+        if rss_kb > memory_limit_kb:
+            print(
+                f"killed by memory limit ({memory_limit_kb}KiB)",
+                file=sys.stderr,
+                flush=True,
+            )
+            proc.kill()
+            break
+
+        time.sleep(0.01)
+finally:
+    sys.exit(proc.wait())
+""".strip()
+
+                    full_command = [
+                        sys.executable,
+                        "-c",
+                        wrapper,
+                        json.dumps(self.parts()),
+                        str(memory_limit_kb),
+                    ]
+                else:
+                    full_command = self.parts()
+
                 self._process = Popen(
-                    self.parts(),
+                    full_command,
                     **self.kwargs,  # type: ignore
                     stdout=self.stdout,
                     stderr=self.stderr,
                     text=True,
+                    shell=False,
                 )  # type: ignore
 
     def wait(self, timeout: float | None = None):
         # wait if the process has a delayed start
-        if self.timer:
+        if self.timer and not self.started():
             while not self._process:
                 # if the process is marked for killing, stop waiting
                 if self.on_kill_list:
@@ -218,6 +282,9 @@ class Command:
 
     def started(self):
         return self._process is not None
+
+    def finished(self):
+        return self.done() or (self.on_kill_list and self._process is None)
 
     def elapsed(self) -> float | None:
         """Returns the elapsed time in seconds.
@@ -301,6 +368,8 @@ class Command:
 
     def result(self) -> TaskResult:
         if not self.started():
+            if self.on_kill_list:
+                return TaskResult.KILLED
             return TaskResult.NOT_STARTED
 
         self._ensure_finished()
@@ -330,7 +399,7 @@ class Command:
         self._ensure_finished()
 
         # return cached values if available
-        if self.stdout_text or self.stderr_text:
+        if self.stdout_text is not None or self.stderr_text is not None:
             return self.stdout_text, self.stderr_text
 
         stdout, stderr = self._read_io()
@@ -347,12 +416,21 @@ class Command:
         timeout: float | None = None,
     ) -> tuple[str, str]:
         assert self._process is not None
+        if self.stdout_text is not None or self.stderr_text is not None:
+            return self.stdout_text or "", self.stderr_text or ""
+
         stdout, stderr = self._process.communicate(input, timeout)
 
-        return (
-            (stdout.decode("utf-8") if isinstance(stdout, bytes) else stdout) or "",
-            (stderr.decode("utf-8") if isinstance(stderr, bytes) else stderr) or "",
-        )
+        stdout_text = (stdout.decode("utf-8") if isinstance(stdout, bytes) else stdout) or ""
+        stderr_text = (stderr.decode("utf-8") if isinstance(stderr, bytes) else stderr) or ""
+
+        if self._memory_limit_triggered:
+            message = self._memory_limit_message or "killed by memory limit\n"
+            if "killed" not in stderr_text.lower():
+                stderr_text = f"{stderr_text}{message}" if stderr_text else message
+
+        self.stdout_text, self.stderr_text = stdout_text, stderr_text
+        return stdout_text, stderr_text
 
     def terminate(self):
         self._ensure_started()
@@ -579,8 +657,6 @@ class ProcessController:
         task = self.task
         task.set_status(TaskStatus.STARTING, required_status=TaskStatus.NOT_STARTED)
 
-        set_process_group()
-
         interval_seconds = self.config.interval_seconds
         if interval_seconds:
             for i, command in enumerate(self.commands):
@@ -591,10 +667,6 @@ class ProcessController:
 
                 self._launchers.append(launcher)
                 launcher.start()
-
-            # wait for all launchers to finish until setting status to RUNNING
-            for launcher in self._launchers:
-                launcher.join()
 
         else:
             with timer("_launch_process"):
@@ -607,7 +679,7 @@ class ProcessController:
 
     def _launch_process(self, command: Command):
         task = self.task
-        if task.status != TaskStatus.STARTING:
+        if task.status >= TaskStatus.TERMINATING:
             logger.debug(f"aborting command starts, task is {task.status!r}")
             return
 
@@ -633,7 +705,7 @@ class ProcessController:
 
         try:
             command.wait(timeout=(self.config.timeout_seconds or None))
-            if not command.done():
+            if command.started() and not command.done():
                 raise RuntimeError(f"{command.bin_name()} not done after wait")
         except TimeoutExpired:
             logger.debug(f"timeout expired for {command.bin_name()}")
@@ -715,6 +787,9 @@ class ProcessController:
 
         if not command.started():
             logger.debug(f"no need to kill {command.bin_name()}, not started yet")
+            if command.timer:
+                command.timer.cancel()
+            command.end_time = time.time()
             return
 
         if command.done():
@@ -766,6 +841,9 @@ class ProcessController:
             if task.status != TaskStatus.RUNNING:
                 return
 
+        if self._launchers and any(launcher.is_alive() for launcher in self._launchers):
+            return
+
         # check if all commands have finished
-        if all(command.done() for command in task.processes):
+        if all(command.finished() for command in task.processes):
             task.set_status(TaskStatus.TERMINATED)

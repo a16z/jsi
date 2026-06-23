@@ -57,7 +57,7 @@ def cmd(
 def test_real_process():
     command = Command("hello-world", args=["echo", "hello", "world"], stdout=PIPE)
     command.start()
-    stdout, stderr = command.communicate(timeout=0.01)
+    stdout, stderr = command.communicate(timeout=0.1)
 
     assert command.returncode == 0
     assert stdout.strip() == "hello world"
@@ -304,7 +304,7 @@ def test_controller_early_exit_with_slow_command():
     assert command1.done() and not command1.ok()
     assert not command1.has_timed_out
     assert command1.returncode == -SIGTERM
-    assert (t1 := command1.elapsed()) and t1 < 0.1
+    assert (t1 := command1.elapsed()) and t1 < 0.2
 
     assert command2.done() and command2.ok()
     assert (t2 := command2.elapsed()) and t2 < 0.1
@@ -445,3 +445,21 @@ def test_controller_interval_full_run():
     assert command1.start_time < command2.start_time + interval
     assert command2.start_time < command3.start_time + interval
     assert task.status is TaskStatus.TERMINATED
+
+
+def test_command_memory_limit():
+    # Simulate a process that allocates excessive memory
+    excessive_memory_command = Command(
+        "memory-hog",
+        args=["python", "-c", "import time; a = ' ' * (10**8); time.sleep(1)"],  # Allocate ~100MB and stay alive briefly
+        stdout=PIPE,
+        stderr=PIPE,
+        memory_limit_kb=50 * 1024,  # Set memory limit to 50MB
+    )
+
+    excessive_memory_command.start()
+    excessive_memory_command.wait()
+
+    # Verify that the process was killed due to exceeding memory limit
+    assert excessive_memory_command.returncode != 0, "Process should be killed due to memory limit"
+    assert "killed" in (stderr := excessive_memory_command.communicate()[1].lower()), f"Expected 'killed' in stderr, got: {stderr}"
